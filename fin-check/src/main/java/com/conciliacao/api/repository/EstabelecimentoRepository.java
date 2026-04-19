@@ -9,4 +9,6 @@ import java.util.UUID;
 public interface EstabelecimentoRepository extends JpaRepository<Estabelecimento, UUID> {
     List<Estabelecimento> findByClienteIdAndAtivoTrue(UUID clienteId);
     List<Estabelecimento> findByClienteId(UUID clienteId);
+    boolean existsByClienteIdAndIdentificadorConciflex(UUID clienteId, String identificadorConciflex);
+    boolean existsByClienteIdAndIdentificadorConciflexAndIdNot(UUID clienteId, String identificadorConciflex, UUID id);
 }

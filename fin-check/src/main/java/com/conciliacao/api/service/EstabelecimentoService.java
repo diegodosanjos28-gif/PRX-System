@@ -1,9 +1,12 @@
 package com.conciliacao.api.service;
 
 import com.conciliacao.api.dto.request.EstabelecimentoRequest;
+import com.conciliacao.api.dto.response.EstabelecimentoResponse;
 import com.conciliacao.api.entity.Cliente;
 import com.conciliacao.api.entity.Estabelecimento;
+import com.conciliacao.api.exception.ConflictException;
 import com.conciliacao.api.exception.ResourceNotFoundException;
+import com.conciliacao.api.mapper.EstabelecimentoMapper;
 import com.conciliacao.api.repository.EstabelecimentoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,17 +22,32 @@ import java.util.UUID;
 public class EstabelecimentoService {
 
     private final EstabelecimentoRepository estabelecimentoRepository;
+    private final EstabelecimentoMapper estabelecimentoMapper;
     private final ClienteService clienteService;
 
     @Transactional(readOnly = true)
-    public List<Estabelecimento> listarPorCliente(UUID clienteId) {
+    public List<EstabelecimentoResponse> listarPorCliente(UUID clienteId) {
         clienteService.buscarEntidade(clienteId);
-        return estabelecimentoRepository.findByClienteIdAndAtivoTrue(clienteId);
+        return estabelecimentoRepository.findByClienteIdAndAtivoTrue(clienteId)
+            .stream()
+            .map(estabelecimentoMapper::toResponse)
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public EstabelecimentoResponse buscarPorId(UUID id) {
+        return estabelecimentoMapper.toResponse(buscarEntidade(id));
     }
 
     @Transactional
-    public Estabelecimento criar(UUID clienteId, EstabelecimentoRequest request) {
+    public EstabelecimentoResponse criar(UUID clienteId, EstabelecimentoRequest request) {
         Cliente cliente = clienteService.buscarEntidade(clienteId);
+
+        if (estabelecimentoRepository.existsByClienteIdAndIdentificadorConciflex(clienteId, request.identificadorConciflex())) {
+            throw new ConflictException(
+                "Já existe um estabelecimento com o identificador Conciflex '" + request.identificadorConciflex() + "' para este cliente"
+            );
+        }
 
         Estabelecimento est = Estabelecimento.builder()
             .cliente(cliente)
@@ -39,15 +57,23 @@ public class EstabelecimentoService {
 
         Estabelecimento salvo = estabelecimentoRepository.save(est);
         log.info("Estabelecimento criado: {} para cliente {}", salvo.getId(), clienteId);
-        return salvo;
+        return estabelecimentoMapper.toResponse(salvo);
     }
 
     @Transactional
-    public Estabelecimento atualizar(UUID id, EstabelecimentoRequest request) {
+    public EstabelecimentoResponse atualizar(UUID id, EstabelecimentoRequest request) {
         Estabelecimento est = buscarEntidade(id);
+
+        if (estabelecimentoRepository.existsByClienteIdAndIdentificadorConciflexAndIdNot(
+                est.getCliente().getId(), request.identificadorConciflex(), id)) {
+            throw new ConflictException(
+                "O identificador Conciflex '" + request.identificadorConciflex() + "' já está em uso por outro estabelecimento deste cliente"
+            );
+        }
+
         est.setDescricao(request.descricao());
         est.setIdentificadorConciflex(request.identificadorConciflex());
-        return estabelecimentoRepository.save(est);
+        return estabelecimentoMapper.toResponse(estabelecimentoRepository.save(est));
     }
 
     @Transactional

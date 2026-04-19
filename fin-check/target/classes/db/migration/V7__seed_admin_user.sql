@@ -10,4 +10,7 @@ CREATE TABLE users (
 -- O hash abaixo corresponde à senha: admin123 (BCrypt com força 10)
 -- Para gerar um novo hash: htpasswd -bnBC 10 "" <senha> | tr -d ':\n' | sed 's/$2y/$2a/'
 INSERT INTO users (login, senha_hash, role)
-VALUES ('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ADM');
+VALUES ('admin', '$2a$10$2u4um9Koml6D1x7My4HkNOGWt.PwVCuVp7g5Q6xhbsqyFZEmLYEte', 'ADM');
+UPDATE users
+SET senha_hash = '$2a$10$2u4um9Koml6D1x7My4HkNOGWt.PwVCuVp7g5Q6xhbsqyFZEmLYEte'
+WHERE login = 'admin';

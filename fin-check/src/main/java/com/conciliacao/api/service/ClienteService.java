@@ -3,6 +3,7 @@ package com.conciliacao.api.service;
 import com.conciliacao.api.dto.request.ClienteRequest;
 import com.conciliacao.api.dto.response.ClienteResponse;
 import com.conciliacao.api.entity.Cliente;
+import com.conciliacao.api.exception.ConflictException;
 import com.conciliacao.api.exception.ResourceNotFoundException;
 import com.conciliacao.api.mapper.ClienteMapper;
 import com.conciliacao.api.repository.ClienteRepository;
@@ -33,12 +34,22 @@ public class ClienteService {
 
     @Transactional(readOnly = true)
     public ClienteResponse buscarPorId(UUID id) {
-        return clienteMapper.toResponse(buscarEntidade(id));
+
+        Cliente cliente = buscarEntidade(id);
+
+        cliente.setConciflex_login(cryptoService.decrypt(cliente.getConciflex_login()));
+        cliente.setConciflex_senha(cryptoService.decrypt(cliente.getConciflex_senha()));
+
+        return clienteMapper.toResponse(cliente);
+
     }
 
     @Transactional
     public ClienteResponse criar(ClienteRequest request) {
-        // Criptografa credenciais Conciflex antes de persistir
+        if (clienteRepository.existsByCnpj(request.cnpj())) {
+            throw new ConflictException("Já existe um cliente cadastrado com o CNPJ " + request.cnpj());
+        }
+
         Cliente cliente = clienteMapper.toEntity(request);
         cliente.setConciflex_login(cryptoService.encrypt(request.conciflexLogin()));
         cliente.setConciflex_senha(cryptoService.encrypt(request.conciflexSenha()));
@@ -51,6 +62,10 @@ public class ClienteService {
     @Transactional
     public ClienteResponse atualizar(UUID id, ClienteRequest request) {
         Cliente cliente = buscarEntidade(id);
+
+        if (clienteRepository.existsByCnpjAndIdNot(request.cnpj(), id)) {
+            throw new ConflictException("O CNPJ " + request.cnpj() + " já está em uso por outro cliente");
+        }
 
         cliente.setRazaoSocial(request.razaoSocial());
         cliente.setNomeFantasia(request.nomeFantasia());
@@ -79,6 +94,6 @@ public class ClienteService {
 
     public Cliente buscarEntidade(UUID id) {
         return clienteRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Cliente", id));
+                .orElseThrow(() -> new ResourceNotFoundException("Cliente", id));
     }
 }

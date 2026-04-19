@@ -1,7 +1,7 @@
 package com.conciliacao.api.controller;
 
 import com.conciliacao.api.dto.request.EstabelecimentoRequest;
-import com.conciliacao.api.entity.Estabelecimento;
+import com.conciliacao.api.dto.response.EstabelecimentoResponse;
 import com.conciliacao.api.service.EstabelecimentoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,20 +19,25 @@ public class EstabelecimentoController {
     private final EstabelecimentoService estabelecimentoService;
 
     @GetMapping("/api/clientes/{clienteId}/estabelecimentos")
-    public ResponseEntity<List<Estabelecimento>> listar(@PathVariable UUID clienteId) {
+    public ResponseEntity<List<EstabelecimentoResponse>> listar(@PathVariable UUID clienteId) {
         return ResponseEntity.ok(estabelecimentoService.listarPorCliente(clienteId));
     }
 
+    @GetMapping("/api/estabelecimentos/{id}")
+    public ResponseEntity<EstabelecimentoResponse> buscarPorId(@PathVariable UUID id) {
+        return ResponseEntity.ok(estabelecimentoService.buscarPorId(id));
+    }
+
     @PostMapping("/api/clientes/{clienteId}/estabelecimentos")
-    public ResponseEntity<Estabelecimento> criar(@PathVariable UUID clienteId,
-                                                  @Valid @RequestBody EstabelecimentoRequest request) {
+    public ResponseEntity<EstabelecimentoResponse> criar(@PathVariable UUID clienteId,
+                                                         @Valid @RequestBody EstabelecimentoRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(estabelecimentoService.criar(clienteId, request));
     }
 
     @PutMapping("/api/estabelecimentos/{id}")
-    public ResponseEntity<Estabelecimento> atualizar(@PathVariable UUID id,
-                                                      @Valid @RequestBody EstabelecimentoRequest request) {
+    public ResponseEntity<EstabelecimentoResponse> atualizar(@PathVariable UUID id,
+                                                              @Valid @RequestBody EstabelecimentoRequest request) {
         return ResponseEntity.ok(estabelecimentoService.atualizar(id, request));
     }
 

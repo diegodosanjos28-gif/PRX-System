@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-04-18T18:40:04-0300",
+    date = "2026-04-19T14:38:26-0300",
     comments = "version: 1.5.5.Final, compiler: javac, environment: Java 21.0.10 (Ubuntu)"
 )
 @Component
@@ -41,6 +41,8 @@ public class ClienteMapperImpl implements ClienteMapper {
             return null;
         }
 
+        String conciflexLogin = null;
+        String conciflexSenha = null;
         UUID id = null;
         String razaoSocial = null;
         String nomeFantasia = null;
@@ -50,6 +52,8 @@ public class ClienteMapperImpl implements ClienteMapper {
         String observacoes = null;
         LocalDateTime criadoEm = null;
 
+        conciflexLogin = cliente.getConciflex_login();
+        conciflexSenha = cliente.getConciflex_senha();
         id = cliente.getId();
         razaoSocial = cliente.getRazaoSocial();
         nomeFantasia = cliente.getNomeFantasia();
@@ -59,7 +63,7 @@ public class ClienteMapperImpl implements ClienteMapper {
         observacoes = cliente.getObservacoes();
         criadoEm = cliente.getCriadoEm();
 
-        ClienteResponse clienteResponse = new ClienteResponse( id, razaoSocial, nomeFantasia, cnpj, whatsapp, ativo, observacoes, criadoEm );
+        ClienteResponse clienteResponse = new ClienteResponse( id, razaoSocial, nomeFantasia, cnpj, whatsapp, ativo, observacoes, criadoEm, conciflexLogin, conciflexSenha );
 
         return clienteResponse;
     }

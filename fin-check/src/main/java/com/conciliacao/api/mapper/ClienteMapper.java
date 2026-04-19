@@ -3,6 +3,7 @@ package com.conciliacao.api.mapper;
 import com.conciliacao.api.dto.request.ClienteRequest;
 import com.conciliacao.api.dto.response.ClienteResponse;
 import com.conciliacao.api.entity.Cliente;
+import jakarta.persistence.Column;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -18,5 +19,7 @@ public interface ClienteMapper {
     @Mapping(target = "conciflex_senha", ignore = true)
     Cliente toEntity(ClienteRequest request);
 
+    @Mapping(target = "conciflexLogin", source = "conciflex_login")
+    @Mapping(target = "conciflexSenha", source = "conciflex_senha")
     ClienteResponse toResponse(Cliente cliente);
 }

@@ -9,9 +9,11 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestControllerAdvice
@@ -21,6 +23,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(ResourceNotFoundException ex, HttpServletRequest req) {
         return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage(), req.getRequestURI());
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleConflict(ConflictException ex, HttpServletRequest req) {
+        return buildResponse(HttpStatus.CONFLICT, ex.getMessage(), req.getRequestURI());
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest req) {
+        String expected = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "desconhecido";
+        String message = String.format("Parâmetro '%s' com valor '%s' é inválido. Formato esperado: %s",
+            ex.getName(), ex.getValue(), expected);
+        return buildResponse(HttpStatus.BAD_REQUEST, message, req.getRequestURI());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -41,11 +56,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest req) {
-        StringBuilder msg = new StringBuilder("Erros de validação: ");
-        for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
-            msg.append("[").append(fe.getField()).append(": ").append(fe.getDefaultMessage()).append("] ");
-        }
-        return buildResponse(HttpStatus.BAD_REQUEST, msg.toString().trim(), req.getRequestURI());
+        List<Map<String, String>> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
+            .map(fe -> Map.of("campo", fe.getField(), "mensagem", fe.getDefaultMessage()))
+            .toList();
+
+        Map<String, Object> body = buildBaseBody(HttpStatus.BAD_REQUEST, "Erro de validação dos campos", req.getRequestURI());
+        body.put("errors", fieldErrors);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
     @ExceptionHandler(Exception.class)
@@ -55,12 +72,16 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String message, String path) {
+        return ResponseEntity.status(status).body(buildBaseBody(status, message, path));
+    }
+
+    private Map<String, Object> buildBaseBody(HttpStatus status, String message, String path) {
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now().toString());
         body.put("status", status.value());
         body.put("error", status.getReasonPhrase());
         body.put("message", message);
         body.put("path", path);
-        return ResponseEntity.status(status).body(body);
+        return body;
     }
 }
