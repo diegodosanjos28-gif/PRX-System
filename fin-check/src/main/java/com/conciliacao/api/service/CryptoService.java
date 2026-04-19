@@ -57,7 +57,7 @@ public class CryptoService {
 
             return new String(cipher.doFinal(ciphertext), "UTF-8");
         } catch (Exception e) {
-            throw new IllegalStateException("Erro ao descriptografar dado", e);
+            return null;
         }
     }
 }
