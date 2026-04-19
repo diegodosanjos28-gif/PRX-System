@@ -1,0 +1,29 @@
+# ── Environment & secrets ──────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── IDE ────────────────────────────────────────────────────────────────────────
+.idea/
+!.idea/.gitignore
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.code-workspace
+
+# ── OS ─────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Maven (fin-check sub-module) ───────────────────────────────────────────────
+fin-check/target/
+fin-check/.mvn/wrapper/maven-wrapper.jar
+
+# ── Docker ─────────────────────────────────────────────────────────────────────
+fin-check/docker-compose.override.yml
+
+# ── Logs ───────────────────────────────────────────────────────────────────────
+*.log
+logs/

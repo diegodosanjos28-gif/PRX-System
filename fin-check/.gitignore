@@ -1,0 +1,40 @@
+# ── Environment & secrets ──────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Maven build output ─────────────────────────────────────────────────────────
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# ── IDE ────────────────────────────────────────────────────────────────────────
+.idea/
+!.idea/.gitignore
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.code-workspace
+
+# ── OS ─────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs ───────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Spring Boot packaged jar ───────────────────────────────────────────────────
+*.jar
+*.war
+*.ear
+
+# ── Docker overrides ───────────────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ── Sample data files (large JSON payloads) ────────────────────────────────────
+conciliacao-taxa.json
+recebimento.json
