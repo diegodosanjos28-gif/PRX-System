@@ -11,5 +11,7 @@ public record ClienteResponse(
     String whatsapp,
     boolean ativo,
     String observacoes,
-    LocalDateTime criadoEm
+    LocalDateTime criadoEm,
+    String conciflexLogin,
+    String conciflexSenha
 ) {}
