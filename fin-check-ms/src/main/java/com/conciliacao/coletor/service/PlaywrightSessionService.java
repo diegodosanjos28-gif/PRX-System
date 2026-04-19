@@ -51,11 +51,12 @@ public class PlaywrightSessionService {
 
     public ConcifixSession autenticar(String login, String senha, String identificadorConciflex) {
         long timeoutMs = (long) timeoutSegundos * 1000;
-        String sid = LocalDateTime.now().format(TS) + "_" +
+
+        String identificadorFolderDebug = LocalDateTime.now().format(TS) + "_" +
             identificadorConciflex.replaceAll("[^a-zA-Z0-9]", "_")
                 .substring(0, Math.min(20, identificadorConciflex.length()));
 
-        prepararDir(sid);
+        prepararDir(identificadorFolderDebug);
 
         BrowserContext context = browser.newContext(new Browser.NewContextOptions()
             .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
@@ -66,90 +67,56 @@ public class PlaywrightSessionService {
         Page page = context.newPage();
 
         try {
-            // ─── PASSO 1: Abrir /login ────────────────────────────────────────────────
-            log.info("[{}] PASSO 1 — Abrindo {}/login", sid, BASE_URL);
-            page.navigate(BASE_URL + "/login");
 
-            page.waitForSelector("#username",
-                new Page.WaitForSelectorOptions()
-                    .setState(WaitForSelectorState.VISIBLE)
-                    .setTimeout(timeoutMs));
+            openLogin(page, identificadorFolderDebug, timeoutMs, login, senha, identificadorConciflex);
 
-            logEstado(page, sid, "p1");
-            shot(page, sid, "p1_login_carregado");
-
-            // ─── PASSO 2: Credenciais + clicar #submitFormLogin ───────────────────────
-            // O botão é <a id="submitFormLogin"> — dispara um AJAX POST para /login.
-            // Usamos waitForResponse para aguardar a resposta AJAX antes de inspecionar o DOM.
-            log.info("[{}] PASSO 2 — Preenchendo credenciais e aguardando resposta AJAX do login", sid);
-
-            page.locator("#username").fill(login);
-            page.locator("#userpassword").fill(senha);
-            shot(page, sid, "p2_credenciais_preenchidas");
-
-            // Clica em #submitFormLogin e aguarda a resposta do POST /login simultaneamente.
-            // Sem waitForResponse, o AJAX pode não ter completado quando checamos o DOM.
-            try {
-                page.waitForResponse(
-                    r -> r.url().contains("/login") && "POST".equals(r.request().method()),
-                    () -> page.locator("#submitFormLogin").click()
-                );
-            } catch (PlaywrightException e) {
-                diagnostico(page, sid, "p2_ajax_falhou");
-                throw falha(sid, identificadorConciflex, "AJAX do login falhou: " + e.getMessage());
-            }
-
-            log.info("[{}] PASSO 2 — Resposta AJAX recebida", sid);
+            log.info("[{}] PASSO 2 — Resposta AJAX recebida", identificadorFolderDebug);
 
             // Aguarda o jQuery/Bootstrap processar a resposta e animar o modal (Bootstrap transition)
             page.waitForTimeout(800);
-            shot(page, sid, "p2_pos_ajax");
+            shot(page, identificadorFolderDebug, "p2_pos_ajax");
 
-            // ─── PASSO 3: Detectar qual modal apareceu ────────────────────────────────
-            // user_comum com clientes  → #modal_clientes (mais comum)
-            // usuario_global           → #staticBackdrop (Empresas)
-            // user_comum sem clientes  → #modalModulos diretamente
-            // credenciais erradas      → nenhum modal / SweetAlert de erro
-            log.info("[{}] PASSO 3 — Verificando estado dos modais", sid);
+
+            log.info("[{}] PASSO 3 — Verificando estado dos modais", identificadorFolderDebug);
 
             boolean clientesVisivel  = isModalVisible(page, "modal_clientes");
             boolean empresasVisivel  = isModalVisible(page, "staticBackdrop");
             boolean modulosVisivel   = isModalVisible(page, "modalModulos");
 
             log.info("[{}] PASSO 3 — modal_clientes={} staticBackdrop={} modalModulos={}",
-                sid, clientesVisivel, empresasVisivel, modulosVisivel);
-            shot(page, sid, "p3_estado_modais");
+                identificadorFolderDebug, clientesVisivel, empresasVisivel, modulosVisivel);
+            shot(page, identificadorFolderDebug, "p3_estado_modais");
 
             if (!clientesVisivel && !empresasVisivel && !modulosVisivel) {
                 // Nenhum modal — verifica se há mensagem de erro de credenciais
                 String bodyText = page.innerText("body");
                 if (bodyText.contains("incorretas") || bodyText.contains("inválid") ||
                     bodyText.contains("incorreto")) {
-                    throw falha(sid, identificadorConciflex,
-                        "Credenciais rejeitadas pelo Conciflex. Screenshots em " + DEBUG_DIR + "/" + sid);
+                    throw falha(identificadorFolderDebug, identificadorConciflex,
+                        "Credenciais rejeitadas pelo Conciflex. Screenshots em " + DEBUG_DIR + "/" + identificadorFolderDebug);
                 }
                 // Modal pode ainda estar animando — aguarda mais um pouco
-                log.info("[{}] PASSO 3 — Nenhum modal ainda visível, aguardando mais 2s...", sid);
+                log.info("[{}] PASSO 3 — Nenhum modal ainda visível, aguardando mais 2s...", identificadorFolderDebug);
                 page.waitForTimeout(2000);
 
                 clientesVisivel = isModalVisible(page, "modal_clientes");
                 empresasVisivel = isModalVisible(page, "staticBackdrop");
                 modulosVisivel  = isModalVisible(page, "modalModulos");
                 log.info("[{}] PASSO 3 — (re-check) modal_clientes={} staticBackdrop={} modalModulos={}",
-                    sid, clientesVisivel, empresasVisivel, modulosVisivel);
-                shot(page, sid, "p3_recheck_modais");
+                    identificadorFolderDebug, clientesVisivel, empresasVisivel, modulosVisivel);
+                shot(page, identificadorFolderDebug, "p3_recheck_modais");
 
                 if (!clientesVisivel && !empresasVisivel && !modulosVisivel) {
-                    diagnostico(page, sid, "p3_sem_modal_apos_espera");
-                    throw falha(sid, identificadorConciflex,
-                        "Nenhum modal apareceu 3s após o AJAX. Screenshots em " + DEBUG_DIR + "/" + sid);
+                    diagnostico(page, identificadorFolderDebug, "p3_sem_modal_apos_espera");
+                    throw falha(identificadorFolderDebug, identificadorConciflex,
+                        "Nenhum modal apareceu 3s após o AJAX. Screenshots em " + DEBUG_DIR + "/" + identificadorFolderDebug);
                 }
             }
 
             // ─── PASSO 3-A: Modal Empresas (#staticBackdrop) ─────────────────────────
             if (empresasVisivel) {
-                log.info("[{}] PASSO 3-A — Modal Empresas visível, buscando empresa", sid);
-                shot(page, sid, "p3a_modal_empresas");
+                log.info("[{}] PASSO 3-A — Modal Empresas visível, buscando empresa", identificadorFolderDebug);
+                shot(page, identificadorFolderDebug, "p3a_modal_empresas");
 
                 // Digita o nome da empresa no campo de busca para filtrar
                 page.locator("#buscaEmpresaNome").fill(identificadorConciflex);
@@ -158,8 +125,8 @@ public class PlaywrightSessionService {
                 String items = (String) page.evaluate(
                     "() => Array.from(document.querySelectorAll('#bodymodal a'))" +
                     "       .map(a => a.innerText?.trim()).filter(Boolean).join(' | ')");
-                log.info("[{}] PASSO 3-A — Empresas filtradas: {}", sid, items);
-                shot(page, sid, "p3a_empresas_filtradas");
+                log.info("[{}] PASSO 3-A — Empresas filtradas: {}", identificadorFolderDebug, items);
+                shot(page, identificadorFolderDebug, "p3a_empresas_filtradas");
 
                 // Clica no link <a> com o nome da empresa dentro de #bodymodal
                 boolean clicou = false;
@@ -173,15 +140,15 @@ public class PlaywrightSessionService {
                         if (loc.count() > 0) {
                             loc.click();
                             clicou = true;
-                            log.info("[{}] PASSO 3-A — Empresa clicada via '{}'", sid, sel);
+                            log.info("[{}] PASSO 3-A — Empresa clicada via '{}'", identificadorFolderDebug, sel);
                             break;
                         }
                     } catch (PlaywrightException ignored) {}
                 }
 
                 if (!clicou) {
-                    diagnostico(page, sid, "p3a_empresa_nao_encontrada");
-                    throw falha(sid, identificadorConciflex,
+                    diagnostico(page, identificadorFolderDebug, "p3a_empresa_nao_encontrada");
+                    throw falha(identificadorFolderDebug, identificadorConciflex,
                         "Empresa não encontrada no modal Empresas. Items: " + items);
                 }
 
@@ -189,29 +156,29 @@ public class PlaywrightSessionService {
                 modulosVisivel  = isModalVisible(page, "modalModulos");
                 clientesVisivel = isModalVisible(page, "modal_clientes");
                 log.info("[{}] PASSO 3-A — Após clicar empresa: modal_clientes={} modalModulos={}",
-                    sid, clientesVisivel, modulosVisivel);
-                shot(page, sid, "p3a_pos_empresa");
+                    identificadorFolderDebug, clientesVisivel, modulosVisivel);
+                shot(page, identificadorFolderDebug, "p3a_pos_empresa");
             }
 
             // ─── PASSO 4: Modal Clientes (#modal_clientes) ───────────────────────────
             if (clientesVisivel || isModalVisible(page, "modal_clientes")) {
-                log.info("[{}] PASSO 4 — Selecionando '{}' em #combo_cliente", sid, identificadorConciflex);
-                shot(page, sid, "p4_modal_clientes");
+                log.info("[{}] PASSO 4 — Selecionando '{}' em #combo_cliente", identificadorFolderDebug, identificadorConciflex);
+                shot(page, identificadorFolderDebug, "p4_modal_clientes");
 
                 String opcoes = (String) page.evaluate(
                     "() => Array.from(document.querySelectorAll('#combo_cliente option'))" +
                     "       .map(o => '\"' + o.text.trim() + '\"=' + o.value).join(' | ')");
-                log.info("[{}] PASSO 4 — Opções disponíveis: {}", sid, opcoes);
+                log.info("[{}] PASSO 4 — Opções disponíveis: {}", identificadorFolderDebug, opcoes);
 
                 try {
                     page.locator("#combo_cliente").selectOption(
                         new com.microsoft.playwright.options.SelectOption()
                             .setLabel(identificadorConciflex));
-                    log.info("[{}] PASSO 4 — Selecionado pelo texto exato", sid);
+                    log.info("[{}] PASSO 4 — Selecionado pelo texto exato", identificadorFolderDebug);
                 } catch (PlaywrightException e) {
                     // Fallback: seleciona a primeira opção com valor não-vazio
                     log.warn("[{}] PASSO 4 — '{}' não encontrado, selecionando primeiro disponível. Opções: {}",
-                        sid, identificadorConciflex, opcoes);
+                        identificadorFolderDebug, identificadorConciflex, opcoes);
                     page.evaluate(
                         "() => { const s = document.getElementById('combo_cliente'); " +
                         "for (let i = 0; i < s.options.length; i++) { " +
@@ -219,99 +186,142 @@ public class PlaywrightSessionService {
                         "    s.dispatchEvent(new Event('change')); break; } } }");
                 }
 
-                shot(page, sid, "p4_cliente_selecionado");
+                shot(page, identificadorFolderDebug, "p4_cliente_selecionado");
                 page.locator("#bt_form_clientes").click();
-                log.info("[{}] PASSO 4 — #bt_form_clientes clicado", sid);
+                log.info("[{}] PASSO 4 — #bt_form_clientes clicado", identificadorFolderDebug);
 
                 // Aguarda jQuery animar o #modalModulos
                 page.waitForTimeout(800);
-                shot(page, sid, "p4_pos_bt_clientes");
+                shot(page, identificadorFolderDebug, "p4_pos_bt_clientes");
             }
 
-            // ─── PASSO 5: Modal de módulos (#modalModulos) → clicar Cartões ──────────
-            // Verifica se #modalModulos está visível (pode já estar se veio direto de user_comum sem clientes)
-            modulosVisivel = isModalVisible(page, "modalModulos");
-            log.info("[{}] PASSO 5 — #modalModulos visível: {}", sid, modulosVisivel);
+            clickModalCards(page, identificadorFolderDebug, identificadorConciflex, timeoutMs);
 
-            if (!modulosVisivel) {
-                diagnostico(page, sid, "p5_modalModulos_nao_visivel");
-                throw falha(sid, identificadorConciflex,
-                    "#modalModulos não apareceu. URL: " + page.url());
-            }
+            logEstado(page, identificadorFolderDebug, "p5_pos_navegacao");
+            shot(page, identificadorFolderDebug, "p5_pos_navegacao");
 
-            String modulos = (String) page.evaluate(
-                "() => Array.from(document.querySelectorAll('[id^=card-modulo]'))" +
-                "       .map(el => el.id + (el.className.includes('disabled') ? '[off]' : '[ok]')).join(' | ')");
-            log.info("[{}] PASSO 5 — Módulos: {}", sid, modulos);
-            shot(page, sid, "p5_modal_modulos");
 
-            // Clicar em #card-modulo-cartoes submete form_modal_empresas (POST /login-global) → navegação completa!
-            // waitForNavigation envolve o click para aguardar a navegação resultante do form.submit()
-            log.info("[{}] PASSO 5 — Clicando #card-modulo-cartoes (causará navegação para /login-global)", sid);
-            try {
-                page.waitForNavigation(
-                    new Page.WaitForNavigationOptions()
-                        .setTimeout(timeoutMs)
-                        .setWaitUntil(com.microsoft.playwright.options.WaitUntilState.DOMCONTENTLOADED),
-                    () -> page.locator("#card-modulo-cartoes").click()
-                );
-            } catch (PlaywrightException e) {
-                // Pode já ter navegado antes do waitForNavigation — verifica a URL atual
-                log.warn("[{}] PASSO 5 — waitForNavigation exception (pode ter já navegado): {}", sid, e.getMessage());
-            }
+            log.info("[{}] Sessão autenticada com sucesso para '{}'", identificadorFolderDebug, identificadorConciflex);
 
-            logEstado(page, sid, "p5_pos_navegacao");
-            shot(page, sid, "p5_pos_navegacao");
-
-            // ─── PASSO 6: Extrair cookies ─────────────────────────────────────────────
-            log.info("[{}] PASSO 6 — Extraindo cookies. URL atual: {}", sid, page.url());
-
-            List<com.microsoft.playwright.options.Cookie> cookies = context.cookies(BASE_URL);
-            log.info("[{}] PASSO 6 — Cookies presentes: {}",
-                sid, cookies.stream().map(c -> c.name).toList());
-
-            String laravelSession = extractCookie(cookies, "laravel_session")
-                .orElseThrow(() -> falha(sid, identificadorConciflex,
-                    "Cookie laravel_session ausente. Cookies: " +
-                    cookies.stream().map(c -> c.name).toList()));
-
-            String xsrfToken = extractCookie(cookies, "XSRF-TOKEN")
-                .map(v -> URLDecoder.decode(v, StandardCharsets.UTF_8))
-                .orElseThrow(() -> falha(sid, identificadorConciflex,
-                    "Cookie XSRF-TOKEN ausente. Cookies: " +
-                    cookies.stream().map(c -> c.name).toList()));
-
-            String cfClearance = extractCookie(cookies, "cf_clearance").orElse("");
-
-            // ─── PASSO 7: Extrair CSRF token ─────────────────────────────────────────
-            log.info("[{}] PASSO 7 — Extraindo CSRF token", sid);
-            String csrfToken = extrairCsrfToken(page, sid);
-
-            if (csrfToken == null || csrfToken.isBlank()) {
-                // Tenta navegar para a página de conciliação para obter o _token
-                page.navigate(BASE_URL + "/conciliacao-taxas");
-                page.waitForLoadState(LoadState.DOMCONTENTLOADED);
-                shot(page, sid, "p7_conciliacao_taxas");
-                csrfToken = extrairCsrfToken(page, sid);
-            }
-
-            if (csrfToken == null || csrfToken.isBlank()) {
-                diagnostico(page, sid, "p7_csrf_nao_encontrado");
-                throw falha(sid, identificadorConciflex, "Token CSRF não encontrado após navegação");
-            }
-
-            log.info("[{}] Sessão autenticada com sucesso para '{}'", sid, identificadorConciflex);
-            return new ConcifixSession(laravelSession, xsrfToken, cfClearance, csrfToken);
+            return extrairSessao(page, identificadorFolderDebug, identificadorConciflex, context);
 
         } catch (LoginConciflexException e) {
             throw e;
         } catch (PlaywrightException e) {
-            diagnostico(page, sid, "erro_playwright_inesperado");
-            throw falha(sid, identificadorConciflex, "Playwright inesperado: " + e.getMessage());
+            diagnostico(page, identificadorFolderDebug, "erro_playwright_inesperado");
+            throw falha(identificadorFolderDebug, identificadorConciflex, "Playwright inesperado: " + e.getMessage());
         } finally {
             page.close();
             context.close();
         }
+    }
+
+    private void clickModalCards(Page page, String identificadorFolderDebug, String identificadorConciflex, Long timeoutMs) {
+
+        // ─── PASSO 5: Modal de módulos (#modalModulos) → clicar Cartões ──────────
+        // Verifica se #modalModulos está visível (pode já estar se veio direto de user_comum sem clientes)
+        Boolean modulosVisivel = isModalVisible(page, "modalModulos");
+        log.info("[{}] PASSO 5 — #modalModulos visível: {}", identificadorFolderDebug, modulosVisivel);
+
+        if (!modulosVisivel) {
+            diagnostico(page, identificadorFolderDebug, "p5_modalModulos_nao_visivel");
+            throw falha(identificadorFolderDebug, identificadorConciflex,
+                    "#modalModulos não apareceu. URL: " + page.url());
+        }
+
+        String modulos = (String) page.evaluate(
+                "() => Array.from(document.querySelectorAll('[id^=card-modulo]'))" +
+                        "       .map(el => el.id + (el.className.includes('disabled') ? '[off]' : '[ok]')).join(' | ')");
+        log.info("[{}] PASSO 5 — Módulos: {}", identificadorFolderDebug, modulos);
+        shot(page, identificadorFolderDebug, "p5_modal_modulos");
+
+        // Clicar em #card-modulo-cartoes submete form_modal_empresas (POST /login-global) → navegação completa!
+        // waitForNavigation envolve o click para aguardar a navegação resultante do form.submit()
+        log.info("[{}] PASSO 5 — Clicando #card-modulo-cartoes (causará navegação para /login-global)", identificadorFolderDebug);
+        try {
+            page.waitForNavigation(
+                    new Page.WaitForNavigationOptions()
+                            .setTimeout(timeoutMs)
+                            .setWaitUntil(com.microsoft.playwright.options.WaitUntilState.DOMCONTENTLOADED),
+                    () -> page.locator("#card-modulo-cartoes").click()
+            );
+        } catch (PlaywrightException e) {
+            // Pode já ter navegado antes do waitForNavigation — verifica a URL atual
+            log.warn("[{}] PASSO 5 — waitForNavigation exception (pode ter já navegado): {}", identificadorFolderDebug, e.getMessage());
+        }
+
+    }
+
+    private ConcifixSession extrairSessao(Page page, String identificadorFolderDebug, String identificadorConciflex, BrowserContext context) {
+
+        // ─── PASSO 6: Extrair cookies ─────────────────────────────────────────────
+        log.info("[{}] PASSO 6 — Extraindo cookies. URL atual: {}", identificadorFolderDebug, page.url());
+
+        List<com.microsoft.playwright.options.Cookie> cookies = context.cookies(BASE_URL);
+        log.info("[{}] PASSO 6 — Cookies presentes: {}",
+                identificadorFolderDebug, cookies.stream().map(c -> c.name).toList());
+
+        String laravelSession = extractCookie(cookies, "laravel_session")
+                .orElseThrow(() -> falha(identificadorFolderDebug, identificadorConciflex,
+                        "Cookie laravel_session ausente. Cookies: " +
+                                cookies.stream().map(c -> c.name).toList()));
+
+        String xsrfToken = extractCookie(cookies, "XSRF-TOKEN")
+                .map(v -> URLDecoder.decode(v, StandardCharsets.UTF_8))
+                .orElseThrow(() -> falha(identificadorFolderDebug, identificadorConciflex,
+                        "Cookie XSRF-TOKEN ausente. Cookies: " +
+                                cookies.stream().map(c -> c.name).toList()));
+
+        String cfClearance = extractCookie(cookies, "cf_clearance").orElse("");
+
+
+        // ─── PASSO 7: Extrair CSRF token ─────────────────────────────────────────
+        log.info("[{}] PASSO 7 — Extraindo CSRF token", identificadorFolderDebug);
+        String csrfToken = extrairCsrfToken(page, identificadorFolderDebug);
+
+
+        if (csrfToken == null || csrfToken.isBlank()) {
+            diagnostico(page, identificadorFolderDebug, "p7_csrf_nao_encontrado");
+            throw falha(identificadorFolderDebug, identificadorConciflex, "Token CSRF não encontrado após navegação");
+        }
+
+        return new ConcifixSession(laravelSession, xsrfToken, cfClearance, csrfToken);
+
+    }
+
+    private void openLogin(Page page, String identificadorFolderDebug, long timeoutMs, String login, String senha, String identificadorConciflex) {
+        log.info("[{}] PASSO 1 — Abrindo {}/login", identificadorFolderDebug, BASE_URL);
+        page.navigate(BASE_URL + "/login");
+
+        page.waitForSelector("#username",
+                new Page.WaitForSelectorOptions()
+                        .setState(WaitForSelectorState.VISIBLE)
+                        .setTimeout(timeoutMs));
+
+        logEstado(page, identificadorFolderDebug, "p1");
+        shot(page, identificadorFolderDebug, "p1_login_carregado");
+
+        // ─── PASSO 2: Credenciais + clicar #submitFormLogin ───────────────────────
+        // O botão é <a id="submitFormLogin"> — dispara um AJAX POST para /login.
+        // Usamos waitForResponse para aguardar a resposta AJAX antes de inspecionar o DOM.
+        log.info("[{}] PASSO 2 — Preenchendo credenciais e aguardando resposta AJAX do login", identificadorFolderDebug);
+
+        page.locator("#username").fill(login);
+        page.locator("#userpassword").fill(senha);
+        shot(page, identificadorFolderDebug, "p2_credenciais_preenchidas");
+
+        // Clica em #submitFormLogin e aguarda a resposta do POST /login simultaneamente.
+        // Sem waitForResponse, o AJAX pode não ter completado quando checamos o DOM.
+        try {
+            page.waitForResponse(
+                    r -> r.url().contains("/login") && "POST".equals(r.request().method()),
+                    () -> page.locator("#submitFormLogin").click()
+            );
+        } catch (PlaywrightException e) {
+            diagnostico(page, identificadorFolderDebug, "p2_ajax_falhou");
+            throw falha(identificadorFolderDebug, identificadorConciflex, "AJAX do login falhou: " + e.getMessage());
+        }
+
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
