@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: conciliacao-coletor
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/conciliacao}
+    username: ${DB_USERNAME:conciliacao}
+    password: ${DB_PASSWORD:conciliacao123}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # NÃO criar nem alterar schema — Flyway é responsabilidade do backend principal
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+
+  flyway:
+    # Flyway desabilitado — schema gerenciado exclusivamente pelo backend principal
+    enabled: false
+
+server:
+  port: 8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+
+# Configurações de coleta (sobreposto por variáveis de ambiente)
+coleta:
+  dias-retroativos: ${COLETA_DIAS_RETROATIVOS:1}
+  cron: ${COLETA_CRON:0 0 17 * * *}
+  timeout-segundos: ${COLETA_TIMEOUT_SEGUNDOS:60}
+  max-retries: ${COLETA_MAX_RETRIES:3}
+
+crypto:
+  secret-key: ${CRYPTO_SECRET_KEY:must-be-replaced-in-production-32ch}
+
+playwright:
+  headless: ${PLAYWRIGHT_HEADLESS:true}
+  slow-mo: ${PLAYWRIGHT_SLOW_MO:0}   # ms entre ações — use 500 com headless=false para debug
+
+logging:
+  pattern:
+    console: '{"timestamp":"%d{ISO8601}","level":"%p","service":"coletor","logger":"%logger{36}","message":"%msg"}%n'
