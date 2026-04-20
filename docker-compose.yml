@@ -1,0 +1,84 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: conciliacao-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: conciliacao
+      POSTGRES_USER: conciliacao
+      POSTGRES_PASSWORD: conciliacao123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conciliacao -d conciliacao"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./fin-check
+      dockerfile: Dockerfile
+    container_name: conciliacao-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/conciliacao
+      DB_USERNAME: conciliacao
+      DB_PASSWORD: conciliacao123
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production-min-32-chars}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-28800000}
+      CRYPTO_SECRET_KEY: ${CRYPTO_SECRET_KEY:-change-this-crypto-key-in-production}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:-}
+      META_PHONE_NUMBER_ID: ${META_PHONE_NUMBER_ID:-}
+      META_WEBHOOK_SECRET: ${META_WEBHOOK_SECRET:-}
+
+  coletor:
+    build:
+      context: ./fin-check-ms
+      dockerfile: Dockerfile
+    container_name: conciliacao-coletor
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    ports:
+      - "8081:8081"
+    shm_size: '2gb'
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/conciliacao
+      DB_USERNAME: conciliacao
+      DB_PASSWORD: conciliacao123
+      CRYPTO_SECRET_KEY: ${CRYPTO_SECRET_KEY:-change-this-crypto-key-in-production}
+      COLETA_DIAS_RETROATIVOS: ${COLETA_DIAS_RETROATIVOS:-1}
+      COLETA_CRON: ${COLETA_CRON:-0 0 17 * * *}
+      COLETA_TIMEOUT_SEGUNDOS: ${COLETA_TIMEOUT_SEGUNDOS:-60}
+      COLETA_MAX_RETRIES: ${COLETA_MAX_RETRIES:-3}
+      PLAYWRIGHT_HEADLESS: "true"
+
+  frontend:
+    build:
+      context: ./fin-check-front
+      dockerfile: Dockerfile
+      args:
+        # Browser-side URL — must be reachable from the user's browser, not from inside Docker
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    container_name: conciliacao-frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
