@@ -12,12 +12,12 @@ import org.springframework.context.annotation.Primary;
 public class JacksonConfig {
 
     /**
-     * Configuração especial necessária para desserializar respostas da API Conciflex.
-     * A API retorna campos numéricos ora como String, ora como Number:
+     * Custom ObjectMapper required to deserialize Conciflex API responses.
+     * The API returns numeric fields inconsistently — sometimes String, sometimes Number:
      *   "VALOR_BRUTO": "32.17"   ← String
      *   "PERCENTUAL_TAXA": 3.61  ← Number
      *   "PERDA_RS": 0            ← Integer
-     * ALLOW_COERCION_OF_SCALARS permite que Jackson converta entre esses tipos automaticamente.
+     * ALLOW_COERCION_OF_SCALARS lets Jackson convert between these types automatically.
      */
     @Bean
     @Primary

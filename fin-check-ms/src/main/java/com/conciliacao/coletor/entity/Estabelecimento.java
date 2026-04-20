@@ -26,9 +26,8 @@ public class Estabelecimento {
     @Column(name = "descricao", nullable = false)
     private String descricao;
 
-    // Texto EXATO que aparece no dropdown do modal "Clientes" do Conciflex.
-    // Usado para localizar e selecionar o <option> correto no <select> do modal.
-    // Exemplo: "Churrascaria Picanhas Grill"
+    // Exact text shown in the Conciflex "Clientes" modal dropdown.
+    // Must match the <option> label precisely so PlaywrightSessionService can select it.
     @Column(name = "identificador_conciflex", nullable = false)
     private String identificadorConciflex;
 

@@ -16,16 +16,15 @@ public class PlaywrightConfig {
     private boolean headless;
 
     /**
-     * Em milissegundos — adiciona pausa entre cada ação do Playwright.
-     * Útil para debug com headless=false: defina PLAYWRIGHT_SLOW_MO=500 para ver cada passo.
-     * Padrão: 0 (sem pausa, produção).
+     * Milliseconds added between every Playwright action.
+     * Set PLAYWRIGHT_SLOW_MO=500 with headless=false to observe each step during debugging.
+     * Default: 0 (no delay — production).
      */
     @Value("${playwright.slow-mo:0}")
     private double slowMo;
 
     /**
-     * Playwright é criado uma única vez na inicialização da aplicação.
-     * Encerrado automaticamente pelo Spring ao destruir o contexto.
+     * Playwright instance created once at startup; destroyed automatically by Spring on shutdown.
      */
     @Bean(destroyMethod = "close")
     public Playwright playwright() {
@@ -33,11 +32,10 @@ public class PlaywrightConfig {
     }
 
     /**
-     * Browser Chromium compartilhado — cada coleta abre um BrowserContext isolado.
-     * Isso evita vazamento de sessão entre estabelecimentos diferentes.
-     * Configurado para evitar detecção de automação por fingerprint.
-     *
-     * Para debug local: PLAYWRIGHT_HEADLESS=false e PLAYWRIGHT_SLOW_MO=500
+     * Shared Chromium browser — each collection run opens an isolated BrowserContext
+     * to prevent session leakage between establishments.
+     * Launch args suppress sandbox and GPU to run reliably inside Docker.
+     * For local debugging: PLAYWRIGHT_HEADLESS=false and PLAYWRIGHT_SLOW_MO=500.
      */
     @Bean(destroyMethod = "close")
     public Browser browser(Playwright playwright) {

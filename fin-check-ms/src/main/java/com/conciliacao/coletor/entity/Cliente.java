@@ -35,11 +35,11 @@ public class Cliente {
     @Column(name = "whatsapp", nullable = false)
     private String whatsapp;
 
-    // Armazenado criptografado (AES-256-GCM) — descriptografado pelo CryptoService antes do uso
+    // Stored encrypted (AES-256-GCM) — decrypted by CryptoService before use; never log raw value
     @Column(name = "conciflex_login", columnDefinition = "TEXT", nullable = false)
     private String conciflex_login;
 
-    // Armazenado criptografado (AES-256-GCM) — descriptografado pelo CryptoService antes do uso
+    // Stored encrypted (AES-256-GCM) — decrypted by CryptoService before use; never log raw value
     @Column(name = "conciflex_senha", columnDefinition = "TEXT", nullable = false)
     private String conciflex_senha;
 

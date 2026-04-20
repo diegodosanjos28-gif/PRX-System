@@ -1,12 +1,16 @@
 package com.conciliacao.coletor.exception;
 
 /**
- * Lançada quando o login/senha do estabelecimento é rejeitado pelo Conciflex.
- * Resulta em status 'login_failed' no LogColeta.
+ * Thrown when the establishment's Conciflex credentials are rejected.
+ * Results in status 'login_failed' in LogColeta.
  */
 public class LoginConciflexException extends RuntimeException {
 
     public LoginConciflexException(String estabelecimento, String motivo) {
-        super("Login falhou para estabelecimento '" + estabelecimento + "': " + motivo);
+        super("Login failed for establishment '" + estabelecimento + "': " + motivo);
+    }
+
+    public LoginConciflexException(String estabelecimento, String motivo, Throwable cause) {
+        super("Login failed for establishment '" + estabelecimento + "': " + motivo, cause);
     }
 }

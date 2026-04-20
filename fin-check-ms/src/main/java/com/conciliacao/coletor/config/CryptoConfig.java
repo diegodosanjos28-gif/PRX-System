@@ -17,8 +17,8 @@ public class CryptoConfig {
     private String rawKey;
 
     /**
-     * Deriva uma chave AES-256 (32 bytes) a partir da variável de ambiente CRYPTO_SECRET_KEY.
-     * Idêntico ao backend principal — usa a mesma chave para descriptografar credenciais Conciflex.
+     * Derives a 32-byte AES-256 key from the CRYPTO_SECRET_KEY environment variable.
+     * Identical to the main backend — must use the same key to decrypt stored Conciflex credentials.
      */
     @Bean
     public SecretKey aesSecretKey() throws Exception {

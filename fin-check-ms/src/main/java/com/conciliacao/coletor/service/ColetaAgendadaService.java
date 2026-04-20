@@ -16,18 +16,18 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Responsável pelo agendamento e execução do job de coleta.
- * Itera sobre todos os clientes e estabelecimentos ativos.
- * Falha em um estabelecimento não interrompe o processamento dos demais.
+ * Drives the scheduled collection job and exposes manual triggers.
+ * Iterates all active clients and establishments; a failure in one establishment
+ * does not interrupt the others.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ColetaAgendadaService {
 
-    private final ClienteRepository       clienteRepository;
-    private final EstabelecimentoRepository estabelecimentoRepository;
-    private final ColetorService          coletorService;
+    private final ClienteRepository          clienteRepository;
+    private final EstabelecimentoRepository  estabelecimentoRepository;
+    private final ColetorService             coletorService;
 
     @Value("${coleta.dias-retroativos:1}")
     private int diasRetroativos;
@@ -36,20 +36,20 @@ public class ColetaAgendadaService {
     private int maxRetries;
 
     /**
-     * Job agendado — executa no horário definido em COLETA_CRON (padrão: 17h diário).
-     * Coleta dados de todos os clientes e estabelecimentos ativos.
+     * Scheduled job — runs at the time configured in COLETA_CRON (default: 17h daily).
+     * Collects data for all active clients and establishments.
      */
-    @Scheduled(fixedDelay = 30)
+    @Scheduled(cron = "${coleta.cron:0 0 17 * * *}")
     public void executarColetaAgendada() {
-        log.info("=== Início do job de coleta agendada ===");
-        LocalDate[] periodo = calcularPeriodo();
+        log.info("=== Collection job started ===");
+        LocalDate[] periodo  = calcularPeriodo();
         LocalDate dataInicio = periodo[0];
         LocalDate dataFim    = periodo[1];
 
-        log.info("Período de coleta: {} até {}", dataInicio, dataFim);
+        log.info("Collection period: {} to {}", dataInicio, dataFim);
 
         List<Cliente> clientes = clienteRepository.findAllAtivosComEstabelecimentosAtivos();
-        log.info("Clientes ativos encontrados: {}", clientes.size());
+        log.info("Active clients found: {}", clientes.size());
 
         int totalEstabelecimentos = 0;
         int sucessos = 0;
@@ -67,69 +67,65 @@ public class ColetaAgendadaService {
                     sucessos++;
                 } catch (Exception e) {
                     falhas++;
-                    log.error("Estabelecimento '{}' falhou após {} tentativas. Continuando...",
+                    log.error("Establishment '{}' failed after {} attempts. Continuing...",
                         estabelecimento.getIdentificadorConciflex(), maxRetries);
                 }
             }
         }
 
-        log.info("=== Job de coleta concluído: {}/{} estabelecimentos com sucesso, {} falhas ===",
+        log.info("=== Collection job finished: {}/{} establishments succeeded, {} failed ===",
             sucessos, totalEstabelecimentos, falhas);
     }
 
     /**
-     * Dispara coleta assíncrona para todos os estabelecimentos ativos de todos os clientes.
-     * Usado pelo endpoint manual POST /api/coleta/iniciar.
+     * Async manual trigger for all active clients and establishments.
+     * Used by POST /api/coleta/iniciar.
      */
     @Async
     public void executarColetaManualGeral() {
-        log.info("Coleta manual geral iniciada");
+        log.info("Manual general collection started");
         executarColetaAgendada();
     }
 
     /**
-     * Dispara coleta assíncrona para todos os estabelecimentos ativos de um cliente específico.
-     * Usado pelo endpoint manual POST /api/coleta/cliente/{clienteId}.
+     * Async manual trigger for all active establishments of a specific client.
+     * Used by POST /api/coleta/cliente/{clienteId}.
      */
     @Async
     public void executarColetaManualCliente(UUID clienteId) {
-        log.info("Coleta manual iniciada para cliente {}", clienteId);
-        LocalDate[] periodo = calcularPeriodo();
+        log.info("Manual collection started for client {}", clienteId);
+        LocalDate[] periodo  = calcularPeriodo();
         LocalDate dataInicio = periodo[0];
         LocalDate dataFim    = periodo[1];
 
         List<Estabelecimento> estabelecimentos =
             estabelecimentoRepository.findAtivosComClienteByClienteId(clienteId);
 
-        log.info("Estabelecimentos ativos do cliente {}: {}", clienteId, estabelecimentos.size());
+        log.info("Active establishments for client {}: {}", clienteId, estabelecimentos.size());
 
         for (Estabelecimento est : estabelecimentos) {
             try {
                 coletarComRetry(est, dataInicio, dataFim);
             } catch (Exception e) {
-                log.error("Estabelecimento '{}' falhou. Continuando...",
-                    est.getIdentificadorConciflex());
+                log.error("Establishment '{}' failed. Continuing...", est.getIdentificadorConciflex());
             }
         }
     }
 
     /**
-     * Calcula o período de coleta com base em COLETA_DIAS_RETROATIVOS.
-     * Exemplo: diasRetroativos=1 → coleta apenas D-1 (ontem).
-     * Exemplo: diasRetroativos=30 → coleta últimos 30 dias.
+     * Calculates the collection window based on COLETA_DIAS_RETROATIVOS.
+     * diasRetroativos=1 → D-1 only; diasRetroativos=30 → last 30 days ending at D-1.
      */
     private LocalDate[] calcularPeriodo() {
-        LocalDate fim    = LocalDate.now().minusDays(1);                   // D-1
+        LocalDate fim    = LocalDate.now().minusDays(1);
         LocalDate inicio = fim.minusDays(diasRetroativos - 1);
         return new LocalDate[]{inicio, fim};
     }
 
     /**
-     * Executa a coleta com retry e backoff exponencial.
-     * Tentativa 1: imediata
-     * Tentativa 2: aguarda 1s
-     * Tentativa 3: aguarda 2s
-     * Após esgotar tentativas: relança a última exceção.
+     * Runs collection with exponential-backoff retries.
+     * Attempt 1: immediate; attempt 2: waits 1s; attempt 3: waits 2s.
+     * Re-throws the last exception after all attempts are exhausted.
      */
     private void coletarComRetry(Estabelecimento estabelecimento, LocalDate inicio, LocalDate fim) {
         Exception ultimaExcecao = null;
@@ -137,26 +133,26 @@ public class ColetaAgendadaService {
         for (int tentativa = 1; tentativa <= maxRetries; tentativa++) {
             try {
                 if (tentativa > 1) {
-                    long esperaMs = (long) Math.pow(2, tentativa - 2) * 1000; // 1s, 2s, 4s...
-                    log.info("Tentativa {} de {} para '{}' — aguardando {}ms",
+                    long esperaMs = (long) Math.pow(2, tentativa - 2) * 1000;
+                    log.info("Attempt {} of {} for '{}' — waiting {}ms",
                         tentativa, maxRetries, estabelecimento.getIdentificadorConciflex(), esperaMs);
                     Thread.sleep(esperaMs);
                 }
 
                 coletorService.coletar(estabelecimento, inicio, fim);
-                return; // sucesso — sai do loop
+                return;
 
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
-                throw new RuntimeException("Thread interrompida durante retry", ie);
+                throw new RuntimeException("Thread interrupted during retry", ie);
             } catch (Exception e) {
                 ultimaExcecao = e;
-                log.warn("Tentativa {}/{} falhou para '{}': {}",
+                log.warn("Attempt {}/{} failed for '{}': {}",
                     tentativa, maxRetries, estabelecimento.getIdentificadorConciflex(), e.getMessage());
             }
         }
 
-        throw new RuntimeException("Todas as tentativas esgotadas para '"
+        throw new RuntimeException("All attempts exhausted for '"
             + estabelecimento.getIdentificadorConciflex() + "'", ultimaExcecao);
     }
 }

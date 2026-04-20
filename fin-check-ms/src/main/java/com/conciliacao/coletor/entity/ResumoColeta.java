@@ -26,7 +26,7 @@ public class ResumoColeta {
     @JoinColumn(name = "estabelecimento_id", nullable = false)
     private Estabelecimento estabelecimento;
 
-    // "conciliacao_taxas" ou "recebimentos"
+    // Collection type: 'conciliacao_taxas' or 'recebimentos' (see ColetorService.TIPO_*)
     @Column(name = "tipo", nullable = false)
     private String tipo;
 

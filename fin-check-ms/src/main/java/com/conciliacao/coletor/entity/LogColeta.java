@@ -27,14 +27,14 @@ public class LogColeta {
     @Column(name = "executado_em", nullable = false)
     private LocalDateTime executadoEm;
 
-    // Valores possíveis: 'success' | 'login_failed' | 'timeout' | 'error'
+    // Possible values: 'success' | 'login_failed' | 'timeout' | 'error' (see ColetorService.STATUS_*)
     @Column(name = "status", nullable = false)
     private String status;
 
     @Column(name = "registros_coletados")
     private Integer registrosColetados;
 
-    // Mensagem de erro quando status != 'success' — nunca contém credenciais ou cookies
+    // Error message when status != 'success' — must never contain credentials or session cookies
     @Column(name = "mensagem_erro", columnDefinition = "TEXT")
     private String mensagemErro;
 }

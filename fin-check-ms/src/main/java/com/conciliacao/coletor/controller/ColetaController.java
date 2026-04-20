@@ -12,8 +12,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Endpoints manuais para disparar coleta sem aguardar o cron job.
- * Todos retornam HTTP 202 (Accepted) imediatamente — execução em background (@Async).
+ * Manual endpoints to trigger collection without waiting for the cron job.
+ * All endpoints return HTTP 202 immediately — execution runs in background via @Async.
  */
 @Slf4j
 @RestController
@@ -21,38 +21,40 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ColetaController {
 
+    private static final String KEY_STATUS    = "status";
+    private static final String KEY_MENSAGEM  = "mensagem";
+    private static final String KEY_TIMESTAMP = "timestamp";
+    private static final String STATUS_VALUE  = "accepted";
+
     private final ColetaAgendadaService coletaAgendadaService;
     private final ClienteRepository     clienteRepository;
 
     /**
      * POST /api/coleta/iniciar
-     * Dispara coleta para TODOS os clientes e estabelecimentos ativos.
-     * Retorna 202 imediatamente — a coleta ocorre em background.
+     * Triggers collection for ALL active clients and establishments.
+     * Returns 202 immediately — collection runs asynchronously.
      */
     @PostMapping("/iniciar")
     public ResponseEntity<Map<String, String>> iniciarColetaGeral() {
-        log.info("Coleta manual geral solicitada às {}", LocalDateTime.now());
-
+        log.info("Manual general collection requested at {}", LocalDateTime.now());
         coletaAgendadaService.executarColetaManualGeral();
-
         return ResponseEntity.accepted().body(Map.of(
-            "status",    "accepted",
-            "mensagem",  "Coleta geral iniciada em background",
-            "timestamp", LocalDateTime.now().toString()
+            KEY_STATUS,    STATUS_VALUE,
+            KEY_MENSAGEM,  "Coleta geral iniciada em background",
+            KEY_TIMESTAMP, LocalDateTime.now().toString()
         ));
     }
 
     /**
      * POST /api/coleta/cliente/{clienteId}
-     * Dispara coleta apenas para os estabelecimentos de um cliente específico.
-     * Retorna 202 imediatamente — a coleta ocorre em background.
-     * Retorna 404 se o cliente não existir ou estiver inativo.
+     * Triggers collection for all establishments of a specific client.
+     * Returns 202 immediately — collection runs asynchronously.
+     * Returns 404 if the client does not exist or is inactive.
      */
     @PostMapping("/cliente/{clienteId}")
     public ResponseEntity<Map<String, String>> iniciarColetaCliente(@PathVariable UUID clienteId) {
-        log.info("Coleta manual solicitada para cliente {} às {}", clienteId, LocalDateTime.now());
+        log.info("Manual collection requested for client {} at {}", clienteId, LocalDateTime.now());
 
-        // Verifica existência e ativo antes de aceitar a requisição
         boolean clienteExisteEAtivo = clienteRepository.findById(clienteId)
             .map(c -> c.isAtivo())
             .orElse(false);
@@ -62,11 +64,10 @@ public class ColetaController {
         }
 
         coletaAgendadaService.executarColetaManualCliente(clienteId);
-
         return ResponseEntity.accepted().body(Map.of(
-            "status",    "accepted",
-            "mensagem",  "Coleta para cliente " + clienteId + " iniciada em background",
-            "timestamp", LocalDateTime.now().toString()
+            KEY_STATUS,    STATUS_VALUE,
+            KEY_MENSAGEM,  "Coleta para cliente " + clienteId + " iniciada em background",
+            KEY_TIMESTAMP, LocalDateTime.now().toString()
         ));
     }
 }

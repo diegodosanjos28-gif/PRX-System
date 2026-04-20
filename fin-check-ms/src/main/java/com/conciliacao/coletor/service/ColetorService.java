@@ -18,16 +18,31 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import java.math.RoundingMode;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 /**
- * Orquestra o ciclo completo de coleta para um único estabelecimento.
- * Responsável por: autenticação, chamadas HTTP, persistência UPSERT e registro de log.
+ * Orchestrates the full collection cycle for a single establishment.
+ * Responsible for: authentication, HTTP calls to Conciflex APIs, UPSERT persistence, and audit logging.
+ *
+ * Flow:
+ * 1. Decrypt client credentials
+ * 2. Open Playwright session and navigate the Conciflex login flow
+ * 3. Extract session cookies and CSRF token
+ * 4. POST /conciliacao-taxas/buscar and persist with UPSERT
+ * 5. POST /recebimentos-operadoras/buscar and persist with UPSERT
+ * 6. Persist totalizadores to resumo_coleta
+ * 7. Write a logs_coleta entry with status 'success'
+ *
+ * On failure: writes a logs_coleta entry with the appropriate status and re-throws.
+ *
+ * @throws LoginConciflexException when credentials are rejected
+ * @throws com.microsoft.playwright.TimeoutError when the configured timeout is exceeded
+ * @throws RuntimeException for any other unexpected failure
  */
 @Slf4j
 @Service
@@ -35,6 +50,20 @@ import java.util.UUID;
 public class ColetorService {
 
     private static final String BASE_URL = "https://login.conciflex.com.br";
+
+    // API endpoint paths
+    private static final String PATH_CONCILIACAO_TAXAS = "/conciliacao-taxas/buscar";
+    private static final String PATH_RECEBIMENTOS      = "/recebimentos-operadoras/buscar";
+
+    // resumo_coleta.tipo values
+    private static final String TIPO_CONCILIACAO_TAXAS = "conciliacao_taxas";
+    private static final String TIPO_RECEBIMENTOS      = "recebimentos";
+
+    // logs_coleta.status values
+    static final String STATUS_SUCCESS      = "success";
+    static final String STATUS_LOGIN_FAILED = "login_failed";
+    static final String STATUS_TIMEOUT      = "timeout";
+    static final String STATUS_ERROR        = "error";
 
     private final CryptoService             cryptoService;
     private final PlaywrightSessionService  playwrightSessionService;
@@ -44,133 +73,116 @@ public class ColetorService {
     private final LogColetaRepository       logColetaRepository;
     private final ObjectMapper              objectMapper;
 
-    /**
-     * Executa o ciclo completo de coleta para um estabelecimento.
-     *
-     * Fluxo:
-     * 1. Descriptografa credenciais do cliente
-     * 2. Abre sessão Playwright e navega pelo fluxo de login no Conciflex
-     * 3. Extrai cookies de sessão e token CSRF
-     * 4. Chama POST /conciliacao-taxas/buscar e persiste com UPSERT
-     * 5. Chama POST /recebimentos-operadoras/buscar e persiste com UPSERT
-     * 6. Persiste totalizadores em resumo_coleta
-     * 7. Registra log_coleta com status 'success'
-     *
-     * Em caso de falha: registra log_coleta com status correto e relança a exceção.
-     *
-     * @throws LoginConciflexException quando as credenciais são rejeitadas
-     * @throws com.microsoft.playwright.TimeoutError quando excede o timeout
-     * @throws RuntimeException para qualquer outro erro
-     */
     public ColetaResultado coletar(Estabelecimento estabelecimento, LocalDate dataInicio, LocalDate dataFim) {
         Cliente cliente = estabelecimento.getCliente();
         String nomeEstabelecimento = estabelecimento.getIdentificadorConciflex();
 
-        log.info("Iniciando coleta para estabelecimento '{}' ({}), período {}/{}",
+        log.info("Starting collection for '{}' ({}), period {}/{}",
             nomeEstabelecimento, estabelecimento.getId(), dataInicio, dataFim);
 
-        // Descriptografa credenciais antes de usar — nunca loga os valores
         String loginDecriptado = cryptoService.decrypt(cliente.getConciflex_login());
         String senhaDecriptada  = cryptoService.decrypt(cliente.getConciflex_senha());
 
         if (loginDecriptado == null || senhaDecriptada == null) {
             LoginConciflexException ex = new LoginConciflexException(nomeEstabelecimento,
-                "Falha ao descriptografar credenciais — verifique a chave CRYPTO_SECRET_KEY");
-            registrarLogFalha(estabelecimento, "login_failed", ex.getMessage());
+                "Failed to decrypt credentials — verify CRYPTO_SECRET_KEY");
+            registrarLogFalha(estabelecimento, STATUS_LOGIN_FAILED, ex.getMessage());
             throw ex;
         }
 
         try {
-            // Autenticação via Playwright — abre browser, navega pelo fluxo de login
             ConcifixSession session = playwrightSessionService.autenticar(
                 loginDecriptado, senhaDecriptada, nomeEstabelecimento);
 
             RestTemplate restTemplate = new RestTemplate();
 
-            // ─── Coleta de Conciliação de Taxas ──────────────────────────────────────
-            ConciliacaoTaxaApiResponse taxasResponse = chamarApiConciflex(
-                restTemplate, session, "/conciliacao-taxas/buscar",
-                dataInicio, dataFim, ConciliacaoTaxaApiResponse.class);
-
-            int registrosTaxas = 0;
-            if (taxasResponse.result() != null) {
-                for (ConciliacaoTaxaItem item : taxasResponse.result()) {
-                    upsertConciliacaoTaxa(item, estabelecimento);
-                    registrosTaxas++;
-                }
-                persistirResumoTaxas(estabelecimento, taxasResponse, dataInicio, dataFim, registrosTaxas);
-            }
-
-            // ─── Coleta de Recebimentos ───────────────────────────────────────────────
-            RecebimentoApiResponse recebimentosResponse = chamarApiConciflex(
-                restTemplate, session, "/recebimentos-operadoras/buscar",
-                dataInicio, dataFim, RecebimentoApiResponse.class);
-
-            int registrosRecebimentos = 0;
-            if (recebimentosResponse.result() != null) {
-                for (RecebimentoItem item : recebimentosResponse.result()) {
-                    upsertRecebimento(item, estabelecimento);
-                    registrosRecebimentos++;
-                }
-                persistirResumoRecebimentos(estabelecimento, recebimentosResponse, dataInicio, dataFim, registrosRecebimentos);
-            }
+            int registrosTaxas = coletarTaxas(restTemplate, session, estabelecimento, dataInicio, dataFim);
+            int registrosRecebimentos = coletarRecebimentos(restTemplate, session, estabelecimento, dataInicio, dataFim);
 
             int total = registrosTaxas + registrosRecebimentos;
-            log.info("Coleta concluída para '{}': {} taxas + {} recebimentos = {} registros",
+            log.info("Collection complete for '{}': {} taxas + {} recebimentos = {} records",
                 nomeEstabelecimento, registrosTaxas, registrosRecebimentos, total);
 
-            // Registra log de sucesso
             registrarLogSucesso(estabelecimento, total);
-
             return new ColetaResultado(estabelecimento.getId(), registrosTaxas, registrosRecebimentos);
 
         } catch (LoginConciflexException e) {
-            log.warn("Login falhou para '{}': {}", nomeEstabelecimento, e.getMessage());
-            registrarLogFalha(estabelecimento, "login_failed", e.getMessage());
+            log.warn("Login failed for '{}': {}", nomeEstabelecimento, e.getMessage());
+            registrarLogFalha(estabelecimento, STATUS_LOGIN_FAILED, e.getMessage());
             throw e;
 
         } catch (com.microsoft.playwright.TimeoutError e) {
-            String msg = "Timeout ao coletar dados do estabelecimento '" + nomeEstabelecimento + "'";
+            String msg = "Timeout collecting data for establishment '" + nomeEstabelecimento + "'";
             log.error(msg);
-            registrarLogFalha(estabelecimento, "timeout", msg);
+            registrarLogFalha(estabelecimento, STATUS_TIMEOUT, msg);
             throw e;
 
         } catch (Exception e) {
-            String msg = "Erro inesperado ao coletar '" + nomeEstabelecimento + "': " + e.getMessage();
+            String msg = "Unexpected error collecting '" + nomeEstabelecimento + "': " + e.getMessage();
             log.error(msg, e);
-            registrarLogFalha(estabelecimento, "error", msg);
+            registrarLogFalha(estabelecimento, STATUS_ERROR, msg);
             throw e;
         }
     }
 
+    /** Fetches conciliacao-taxas, persists all items, and saves a summary; returns the item count. */
+    private int coletarTaxas(RestTemplate restTemplate, ConcifixSession session,
+                              Estabelecimento estabelecimento, LocalDate dataInicio, LocalDate dataFim) {
+        ConciliacaoTaxaApiResponse resp = chamarApiConciflex(
+            restTemplate, session, PATH_CONCILIACAO_TAXAS,
+            dataInicio, dataFim, ConciliacaoTaxaApiResponse.class);
+
+        if (resp.result() == null) return 0;
+
+        int count = 0;
+        for (ConciliacaoTaxaItem item : resp.result()) {
+            upsertConciliacaoTaxa(item, estabelecimento);
+            count++;
+        }
+        persistirResumoTaxas(estabelecimento, resp, dataInicio, dataFim, count);
+        return count;
+    }
+
+    /** Fetches recebimentos-operadoras, persists all items, and saves a summary; returns the item count. */
+    private int coletarRecebimentos(RestTemplate restTemplate, ConcifixSession session,
+                                     Estabelecimento estabelecimento, LocalDate dataInicio, LocalDate dataFim) {
+        RecebimentoApiResponse resp = chamarApiConciflex(
+            restTemplate, session, PATH_RECEBIMENTOS,
+            dataInicio, dataFim, RecebimentoApiResponse.class);
+
+        if (resp.result() == null) return 0;
+
+        int count = 0;
+        for (RecebimentoItem item : resp.result()) {
+            upsertRecebimento(item, estabelecimento);
+            count++;
+        }
+        persistirResumoRecebimentos(estabelecimento, resp, dataInicio, dataFim, count);
+        return count;
+    }
+
     /**
-     * Chama um endpoint da API Conciflex usando os cookies de sessão extraídos pelo Playwright.
-     * Usa multipart/form-data conforme exigido pela API.
+     * Calls a Conciflex API endpoint using the session cookies extracted by Playwright.
+     * Uses multipart/form-data as required by the API.
+     * The XSRF-TOKEN must be URL-encoded when sent as a cookie header value.
      */
     private <T> T chamarApiConciflex(RestTemplate restTemplate, ConcifixSession session,
                                       String path, LocalDate dataInicio, LocalDate dataFim,
                                       Class<T> responseType) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-
-        // Monta o header Cookie com os três cookies de sessão
-        // O XSRF-TOKEN precisa ser re-encoded ao ser enviado no cookie header
         headers.set("Cookie",
             "cf_clearance=" + session.cfClearance() + "; " +
             "laravel_session=" + session.laravelSession() + "; " +
             "XSRF-TOKEN=" + URLEncoder.encode(session.xsrfToken(), StandardCharsets.UTF_8));
 
-        // Body multipart com _token CSRF e o período de busca
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("_token",       session.csrfToken());
-        body.add("data_inicial", dataInicio.toString()); // "2026-04-09"
-        body.add("data_final",   dataFim.toString());     // "2026-04-18"
+        body.add("data_inicial", dataInicio.toString());
+        body.add("data_final",   dataFim.toString());
 
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
-
-        ResponseEntity<T> response = restTemplate.postForEntity(
-            BASE_URL + path, request, responseType);
-
+        ResponseEntity<T> response = restTemplate.postForEntity(BASE_URL + path, request, responseType);
         return response.getBody();
     }
 
@@ -209,9 +221,9 @@ public class ColetorService {
 
     @Transactional
     protected void upsertRecebimento(RecebimentoItem item, Estabelecimento est) {
-        // parcela e totalParcelas: a API retorna Integer, mas a coluna é SMALLINT
-        Short parcela      = item.parcela()      != null ? item.parcela().shortValue()      : null;
-        Short totalParcelas = item.totalParcelas() != null ? item.totalParcelas().shortValue() : null;
+        // parcela and totalParcelas: API returns Integer but the column is SMALLINT — convert for type safety
+        Short parcela       = item.parcela()       != null ? item.parcela().shortValue()       : null;
+        Short totalParcelas = item.totalParcelas()  != null ? item.totalParcelas().shortValue()  : null;
 
         recebimentoRepository.upsert(
             UUID.randomUUID(),
@@ -245,7 +257,7 @@ public class ColetorService {
             item.outrasDespesas(),
             item.valorLiquido(),
             item.valorLiquidoSAntecipacao(),
-            parcela != null ? parcela.intValue() : null,
+            parcela       != null ? parcela.intValue()       : null,
             totalParcelas != null ? totalParcelas.intValue() : null,
             item.possuiTaxaMinima(),
             item.estabelecimento(),
@@ -267,17 +279,16 @@ public class ColetorService {
 
     private void persistirResumoTaxas(Estabelecimento est, ConciliacaoTaxaApiResponse resp,
                                        LocalDate inicio, LocalDate fim, int totalRegistros) {
-        String totalizadoresJson = serializarTotalizadores(resp);
         ResumoColeta resumo = ResumoColeta.builder()
             .estabelecimento(est)
-            .tipo("conciliacao_taxas")
+            .tipo(TIPO_CONCILIACAO_TAXAS)
             .dataInicio(inicio)
             .dataFim(fim)
             .totalRegistros(totalRegistros)
             .valorBrutoTotal(resp.totalValorBrutoAuditadas())
             .valorLiquidoTotal(resp.totalLiquido())
             .totalTaxas(resp.totalTaxas())
-            .totalizadoresJson(totalizadoresJson)
+            .totalizadoresJson(serializarTotalizadores(resp))
             .coletadoEm(LocalDateTime.now())
             .build();
         resumoColetaRepository.save(resumo);
@@ -285,48 +296,47 @@ public class ColetorService {
 
     private void persistirResumoRecebimentos(Estabelecimento est, RecebimentoApiResponse resp,
                                               LocalDate inicio, LocalDate fim, int totalRegistros) {
-        String totalizadoresJson = serializarTotalizadores(resp);
         ResumoColeta resumo = ResumoColeta.builder()
             .estabelecimento(est)
-            .tipo("recebimentos")
+            .tipo(TIPO_RECEBIMENTOS)
             .dataInicio(inicio)
             .dataFim(fim)
             .totalRegistros(totalRegistros)
-            .valorBrutoTotal(resp.sum() != null ? resp.sum().setScale(4, java.math.RoundingMode.HALF_UP) : null)
+            .valorBrutoTotal(resp.sum() != null ? resp.sum().setScale(4, RoundingMode.HALF_UP) : null)
             .valorLiquidoTotal(resp.sumValorLiquido())
             .totalTaxas(resp.sumCustoTaxa())
-            .totalizadoresJson(totalizadoresJson)
+            .totalizadoresJson(serializarTotalizadores(resp))
             .coletadoEm(LocalDateTime.now())
             .build();
         resumoColetaRepository.save(resumo);
     }
 
+    /** Serializes an object to JSON; logs a warning and returns an empty object string on failure. */
     private String serializarTotalizadores(Object obj) {
         try {
             return objectMapper.writeValueAsString(obj);
         } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize totalizadores for {}: {}", obj.getClass().getSimpleName(), e.getMessage());
             return "{}";
         }
     }
 
     private void registrarLogSucesso(Estabelecimento est, int registros) {
-        LogColeta log = LogColeta.builder()
+        logColetaRepository.save(LogColeta.builder()
             .estabelecimento(est)
             .executadoEm(LocalDateTime.now())
-            .status("success")
+            .status(STATUS_SUCCESS)
             .registrosColetados(registros)
-            .build();
-        logColetaRepository.save(log);
+            .build());
     }
 
     private void registrarLogFalha(Estabelecimento est, String status, String mensagem) {
-        LogColeta logEntry = LogColeta.builder()
+        logColetaRepository.save(LogColeta.builder()
             .estabelecimento(est)
             .executadoEm(LocalDateTime.now())
             .status(status)
             .registrosColetados(0)
             .mensagemErro(mensagem)
-            .build();
-        logColetaRepository.save(logEntry);
+            .build());
     }
 }
