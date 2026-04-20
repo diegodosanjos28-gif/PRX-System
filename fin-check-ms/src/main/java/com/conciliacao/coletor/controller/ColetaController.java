@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -52,22 +53,25 @@ public class ColetaController {
      * Returns 404 if the client does not exist or is inactive.
      */
     @PostMapping("/cliente/{clienteId}")
-    public ResponseEntity<Map<String, String>> iniciarColetaCliente(@PathVariable UUID clienteId) {
+    public ResponseEntity<Map<String, String>> iniciarColetaClienteRange(@PathVariable UUID clienteId,
+                                                                         @RequestParam(value = "dataInicio", defaultValue = "") LocalDate dataInicio,
+                                                                         @RequestParam(value = "dataFim",  defaultValue = "") LocalDate dataFim) {
+
         log.info("Manual collection requested for client {} at {}", clienteId, LocalDateTime.now());
 
         boolean clienteExisteEAtivo = clienteRepository.findById(clienteId)
-            .map(c -> c.isAtivo())
-            .orElse(false);
+                .map(c -> c.isAtivo())
+                .orElse(false);
 
         if (!clienteExisteEAtivo) {
             return ResponseEntity.notFound().build();
         }
 
-        coletaAgendadaService.executarColetaManualCliente(clienteId);
+        coletaAgendadaService.executarColetaManualCliente(clienteId, dataInicio, dataFim);
         return ResponseEntity.accepted().body(Map.of(
-            KEY_STATUS,    STATUS_VALUE,
-            KEY_MENSAGEM,  "Coleta para cliente " + clienteId + " iniciada em background",
-            KEY_TIMESTAMP, LocalDateTime.now().toString()
+                KEY_STATUS,    STATUS_VALUE,
+                KEY_MENSAGEM,  "Coleta para cliente " + clienteId + " iniciada em background",
+                KEY_TIMESTAMP, LocalDateTime.now().toString()
         ));
     }
 }

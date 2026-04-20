@@ -6,6 +6,7 @@ import com.conciliacao.coletor.repository.ClienteRepository;
 import com.conciliacao.coletor.repository.EstabelecimentoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.type.descriptor.DateTimeUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,6 +15,8 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+
+import static com.conciliacao.coletor.utils.DateUtils.validPeriod;
 
 /**
  * Drives the scheduled collection job and exposes manual triggers.
@@ -92,11 +95,17 @@ public class ColetaAgendadaService {
      * Used by POST /api/coleta/cliente/{clienteId}.
      */
     @Async
-    public void executarColetaManualCliente(UUID clienteId) {
+    public void executarColetaManualCliente(UUID clienteId, LocalDate dataInicio, LocalDate dataFim) {
         log.info("Manual collection started for client {}", clienteId);
-        LocalDate[] periodo  = calcularPeriodo();
-        LocalDate dataInicio = periodo[0];
-        LocalDate dataFim    = periodo[1];
+
+        if (!validPeriod(dataInicio, dataFim)) {
+
+            LocalDate[] periodo  = calcularPeriodo();
+
+            dataInicio = periodo[0];
+            dataFim    = periodo[1];
+
+        }
 
         List<Estabelecimento> estabelecimentos =
             estabelecimentoRepository.findAtivosComClienteByClienteId(clienteId);

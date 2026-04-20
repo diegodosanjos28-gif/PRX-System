@@ -1,5 +1,7 @@
 package com.conciliacao.api.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -12,6 +14,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Estabelecimento {
 
     @Id
@@ -21,6 +24,7 @@ public class Estabelecimento {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "cliente_id", nullable = false)
+    @JsonIgnore
     private Cliente cliente;
 
     @Column(name = "descricao", nullable = false)

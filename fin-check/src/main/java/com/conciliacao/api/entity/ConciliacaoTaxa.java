@@ -29,7 +29,7 @@ public class ConciliacaoTaxa {
     private Estabelecimento estabelecimento;
 
     // Campo ID da API Conciflex
-    @Column(name = "id_conciflex")
+    @Column(name = "id_conciflex", unique = true)
     private String idConciflex;
 
     @Column(name = "codigo_empresa")

@@ -29,7 +29,7 @@ public class Recebimento {
     private Estabelecimento estabelecimento;
 
     // Campo ID da API Conciflex
-    @Column(name = "id_conciflex")
+    @Column(name = "id_conciflex", unique = true)
     private String idConciflex;
 
     // "1"=Pagamento, "2"=Ajuste Débito, "3"=Ajuste Crédito
