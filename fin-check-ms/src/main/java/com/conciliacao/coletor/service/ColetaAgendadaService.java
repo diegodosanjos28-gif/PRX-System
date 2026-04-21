@@ -6,7 +6,6 @@ import com.conciliacao.coletor.repository.ClienteRepository;
 import com.conciliacao.coletor.repository.EstabelecimentoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.type.descriptor.DateTimeUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -44,10 +43,23 @@ public class ColetaAgendadaService {
      */
     @Scheduled(cron = "${coleta.cron:0 0 17 * * *}")
     public void executarColetaAgendada() {
+        executarColetaManual(null, null);
+    }
+
+
+    @Async
+    public void executarColetaManual(LocalDate dataInicio, LocalDate dataFim) {
+
         log.info("=== Collection job started ===");
-        LocalDate[] periodo  = calcularPeriodo();
-        LocalDate dataInicio = periodo[0];
-        LocalDate dataFim    = periodo[1];
+
+        if (!validPeriod(dataInicio, dataFim)) {
+
+            LocalDate[] periodo  = calcularPeriodoDefault();
+
+            dataInicio = periodo[0];
+            dataFim    = periodo[1];
+
+        }
 
         log.info("Collection period: {} to {}", dataInicio, dataFim);
 
@@ -81,16 +93,6 @@ public class ColetaAgendadaService {
     }
 
     /**
-     * Async manual trigger for all active clients and establishments.
-     * Used by POST /api/coleta/iniciar.
-     */
-    @Async
-    public void executarColetaManualGeral() {
-        log.info("Manual general collection started");
-        executarColetaAgendada();
-    }
-
-    /**
      * Async manual trigger for all active establishments of a specific client.
      * Used by POST /api/coleta/cliente/{clienteId}.
      */
@@ -100,7 +102,7 @@ public class ColetaAgendadaService {
 
         if (!validPeriod(dataInicio, dataFim)) {
 
-            LocalDate[] periodo  = calcularPeriodo();
+            LocalDate[] periodo  = calcularPeriodoDefault();
 
             dataInicio = periodo[0];
             dataFim    = periodo[1];
@@ -125,7 +127,7 @@ public class ColetaAgendadaService {
      * Calculates the collection window based on COLETA_DIAS_RETROATIVOS.
      * diasRetroativos=1 → D-1 only; diasRetroativos=30 → last 30 days ending at D-1.
      */
-    private LocalDate[] calcularPeriodo() {
+    private LocalDate[] calcularPeriodoDefault() {
         LocalDate fim    = LocalDate.now().minusDays(1);
         LocalDate inicio = fim.minusDays(diasRetroativos - 1);
         return new LocalDate[]{inicio, fim};

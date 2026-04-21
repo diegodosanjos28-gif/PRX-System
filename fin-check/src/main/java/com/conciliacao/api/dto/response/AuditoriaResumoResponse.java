@@ -7,5 +7,6 @@ public record AuditoriaResumoResponse(
     Long totalTransacoes,
     BigDecimal totalCobradoAMais,
     BigDecimal totalCobradoAMenos,
-    List<AuditoriaPorBandeira> porBandeira
+    List<AuditoriaPorBandeira> porBandeira,
+    List<ConciliacaoTaxaResponse> conciliacaoTaxaResponse
 ) {}

@@ -2,6 +2,9 @@ package com.conciliacao.api.service;
 
 import com.conciliacao.api.dto.response.AuditoriaPorBandeira;
 import com.conciliacao.api.dto.response.AuditoriaResumoResponse;
+import com.conciliacao.api.dto.response.ConciliacaoTaxaResponse;
+import com.conciliacao.api.entity.ConciliacaoTaxa;
+import com.conciliacao.api.mapper.ConciliacaoTaxaMapper;
 import com.conciliacao.api.repository.ConciliacaoTaxaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,6 +21,7 @@ public class AuditoriaService {
 
     private final ConciliacaoTaxaRepository conciliacaoTaxaRepository;
     private final EstabelecimentoService estabelecimentoService;
+    private final ConciliacaoTaxaMapper conciliacaoTaxaMapper;
 
     @Transactional(readOnly = true)
     public AuditoriaResumoResponse resumo(UUID estabelecimentoId, LocalDate inicio, LocalDate fim) {
@@ -47,11 +51,14 @@ public class AuditoriaService {
             ))
             .toList();
 
+        List<ConciliacaoTaxa> conciliacoesTaxa = conciliacaoTaxaRepository.findByEstabelecimentoIdAndDataVendaBetween(estabelecimentoId, inicio, fim);
+
         return new AuditoriaResumoResponse(
             total,
             cobradoAMais != null ? cobradoAMais : BigDecimal.ZERO,
             cobradoAMenos != null ? cobradoAMenos.abs() : BigDecimal.ZERO,
-            porBandeira
+            porBandeira,
+            conciliacaoTaxaMapper.toResponseList(conciliacoesTaxa)
         );
     }
 }

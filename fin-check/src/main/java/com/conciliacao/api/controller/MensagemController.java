@@ -2,8 +2,12 @@ package com.conciliacao.api.controller;
 
 import com.conciliacao.api.dto.request.MensagemEnviarRequest;
 import com.conciliacao.api.dto.request.MensagemGerarRequest;
+import com.conciliacao.api.dto.response.AuditoriaResumoResponse;
 import com.conciliacao.api.dto.response.MensagemResponse;
+import com.conciliacao.api.dto.response.RecebimentoResumoResponse;
+import com.conciliacao.api.service.AuditoriaService;
 import com.conciliacao.api.service.MensagemService;
+import com.conciliacao.api.service.RecebimentoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,11 +23,17 @@ import java.util.UUID;
 public class MensagemController {
 
     private final MensagemService mensagemService;
+    private final AuditoriaService auditoriaService;
+    private final RecebimentoService recebimentoService;
 
     @PostMapping("/gerar")
-    public ResponseEntity<Map<String, String>> gerar(@Valid @RequestBody MensagemGerarRequest request) {
+    public ResponseEntity<Map<String, Object>> gerar(@Valid @RequestBody MensagemGerarRequest request) {
         String texto = mensagemService.gerar(request);
-        return ResponseEntity.ok(Map.of("mensagem", texto));
+
+        AuditoriaResumoResponse resumoAuditoria = auditoriaService.resumo(request.estabelecimentoId(), request.dataInicio(), request.dataFim());
+        RecebimentoResumoResponse resumoRecebimento = recebimentoService.resumo(request.estabelecimentoId(), request.dataInicio(), request.dataFim());
+
+        return ResponseEntity.ok(Map.of("mensagem", texto, "resumoAuditoria", resumoAuditoria, "resumoRecebimento", resumoRecebimento));
     }
 
     @PostMapping("/enviar")

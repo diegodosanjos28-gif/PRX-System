@@ -2,6 +2,8 @@ package com.conciliacao.api.service;
 
 import com.conciliacao.api.dto.response.RecebimentoPorBandeira;
 import com.conciliacao.api.dto.response.RecebimentoResumoResponse;
+import com.conciliacao.api.entity.Recebimento;
+import com.conciliacao.api.mapper.RecebimentoMapper;
 import com.conciliacao.api.repository.RecebimentoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ public class RecebimentoService {
 
     private final RecebimentoRepository recebimentoRepository;
     private final EstabelecimentoService estabelecimentoService;
+    private final RecebimentoMapper recebimentoMapper;
 
     @Transactional(readOnly = true)
     public RecebimentoResumoResponse resumo(UUID estabelecimentoId, LocalDate inicio, LocalDate fim) {
@@ -38,10 +41,13 @@ public class RecebimentoService {
             ))
             .toList();
 
+        List<Recebimento> recebimentos = recebimentoRepository.findByEstabelecimentoIdAndDataPagamentoBetween(estabelecimentoId, inicio, fim);
+
         return new RecebimentoResumoResponse(
             totalRecebido != null ? totalRecebido : BigDecimal.ZERO,
             totalDescontado != null ? totalDescontado : BigDecimal.ZERO,
-            porBandeira
+            porBandeira,
+            recebimentoMapper.toResponseList(recebimentos)
         );
     }
 }

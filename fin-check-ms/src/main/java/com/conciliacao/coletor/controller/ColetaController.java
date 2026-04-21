@@ -36,16 +36,18 @@ public class ColetaController {
      * Returns 202 immediately — collection runs asynchronously.
      */
     @PostMapping("/iniciar")
-    public ResponseEntity<Map<String, String>> iniciarColetaGeral() {
+    public ResponseEntity<Map<String, String>> iniciarColetaGeral(
+            @RequestParam(value = "dataInicio", required = false) LocalDate dataInicio,
+            @RequestParam(value = "dataFim",    required = false) LocalDate dataFim) {
+
         log.info("Manual general collection requested at {}", LocalDateTime.now());
-        coletaAgendadaService.executarColetaManualGeral();
+        coletaAgendadaService.executarColetaManual(dataInicio, dataFim);
         return ResponseEntity.accepted().body(Map.of(
-            KEY_STATUS,    STATUS_VALUE,
-            KEY_MENSAGEM,  "Coleta geral iniciada em background",
-            KEY_TIMESTAMP, LocalDateTime.now().toString()
+                KEY_STATUS,    STATUS_VALUE,
+                KEY_MENSAGEM,  "Coleta geral iniciada em background",
+                KEY_TIMESTAMP, LocalDateTime.now().toString()
         ));
     }
-
     /**
      * POST /api/coleta/cliente/{clienteId}
      * Triggers collection for all establishments of a specific client.
@@ -53,9 +55,10 @@ public class ColetaController {
      * Returns 404 if the client does not exist or is inactive.
      */
     @PostMapping("/cliente/{clienteId}")
-    public ResponseEntity<Map<String, String>> iniciarColetaClienteRange(@PathVariable UUID clienteId,
-                                                                         @RequestParam(value = "dataInicio", defaultValue = "") LocalDate dataInicio,
-                                                                         @RequestParam(value = "dataFim",  defaultValue = "") LocalDate dataFim) {
+    public ResponseEntity<Map<String, String>> iniciarColetaCliente(
+            @PathVariable UUID clienteId,
+            @RequestParam(value = "dataInicio", required = false) LocalDate dataInicio,
+            @RequestParam(value = "dataFim",    required = false) LocalDate dataFim) {
 
         log.info("Manual collection requested for client {} at {}", clienteId, LocalDateTime.now());
 
@@ -74,4 +77,5 @@ public class ColetaController {
                 KEY_TIMESTAMP, LocalDateTime.now().toString()
         ));
     }
+
 }

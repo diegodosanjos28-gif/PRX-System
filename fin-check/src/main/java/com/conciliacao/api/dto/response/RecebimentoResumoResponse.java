@@ -6,5 +6,6 @@ import java.util.List;
 public record RecebimentoResumoResponse(
     BigDecimal totalRecebido,
     BigDecimal totalDescontado,
-    List<RecebimentoPorBandeira> porBandeira
+    List<RecebimentoPorBandeira> porBandeira,
+    List<RecebimentoResponse> recebimentos
 ) {}

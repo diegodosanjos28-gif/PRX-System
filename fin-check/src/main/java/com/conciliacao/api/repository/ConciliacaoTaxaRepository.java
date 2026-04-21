@@ -61,4 +61,5 @@ public interface ConciliacaoTaxaRepository extends JpaRepository<ConciliacaoTaxa
     Long countByEstabelecimentoIdAndDataVendaBetween(
         UUID estabelecimentoId, LocalDate inicio, LocalDate fim
     );
+
 }
