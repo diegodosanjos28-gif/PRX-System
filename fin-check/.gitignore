@@ -38,3 +38,4 @@ docker-compose.override.yml
 # ── Sample data files (large JSON payloads) ────────────────────────────────────
 conciliacao-taxa.json
 recebimento.json
+target
