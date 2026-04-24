@@ -11,5 +11,6 @@ public record MensagemGerarRequest(
     @NotNull UUID estabelecimentoId,
     @NotNull LocalDate dataInicio,
     @NotNull LocalDate dataFim,
-    @NotBlank String modo   // "ia" ou "template"
+    @NotBlank String modo,   // "ia" ou "template"
+    Long templateId          // obrigatório quando modo="template"
 ) {}

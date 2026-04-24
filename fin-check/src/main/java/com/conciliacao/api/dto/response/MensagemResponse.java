@@ -10,5 +10,7 @@ public record MensagemResponse(
     String modoGeracao,
     String metaMessageId,
     String statusEntrega,
-    LocalDateTime enviadoEm
+    LocalDateTime enviadoEm,
+    UUID estabelecimentoId,
+    String templateNome
 ) {}

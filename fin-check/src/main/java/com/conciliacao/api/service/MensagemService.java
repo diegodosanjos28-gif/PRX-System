@@ -8,16 +8,19 @@ import com.conciliacao.api.dto.response.RecebimentoResumoResponse;
 import com.conciliacao.api.entity.Cliente;
 import com.conciliacao.api.entity.Estabelecimento;
 import com.conciliacao.api.entity.MensagemEnviada;
+import com.conciliacao.api.entity.Template;
 import com.conciliacao.api.repository.MensagemEnviadaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -31,10 +34,8 @@ public class MensagemService {
     private final WhatsAppService whatsAppService;
     private final ClienteService clienteService;
     private final EstabelecimentoService estabelecimentoService;
+    private final TemplateService templateService;
     private final MensagemEnviadaRepository mensagemEnviadaRepository;
-
-    @Value("${mensagem.template}")
-    private String templateFixo;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -70,25 +71,55 @@ public class MensagemService {
                                      MensagemGerarRequest req,
                                      AuditoriaResumoResponse auditoria,
                                      RecebimentoResumoResponse recebimentos) {
+        if (req.templateId() == null) {
+            throw new IllegalArgumentException("templateId é obrigatório para o modo 'template'");
+        }
+
+        Template template = templateService.buscarEntidade(req.templateId());
         String nome = cliente.getNomeFantasia() != null ? cliente.getNomeFantasia() : cliente.getRazaoSocial();
-        return templateFixo
-            .replace("{nomeFantasia}", nome)
-            .replace("{dataInicio}", req.dataInicio().format(FMT))
-            .replace("{dataFim}", req.dataFim().format(FMT))
-            .replace("{estabelecimento}", est.getDescricao())
-            .replace("{totalTransacoes}", String.valueOf(auditoria.totalTransacoes()))
-            .replace("{cobradoAMais}", formatarValor(auditoria.totalCobradoAMais()))
-            .replace("{cobradoAMenos}", formatarValor(auditoria.totalCobradoAMenos()))
-            .replace("{totalRecebido}", formatarValor(recebimentos.totalRecebido()))
-            .replace("{totalDescontado}", formatarValor(recebimentos.totalDescontado()));
+
+        // Mapa de valores para todas as variáveis de sistema
+        Map<String, String> valores = Map.of(
+            "{nomeFantasia}",    nome,
+            "{dataInicio}",      req.dataInicio().format(FMT),
+            "{dataFim}",         req.dataFim().format(FMT),
+            "{estabelecimento}", est.getDescricao(),
+            "{totalTransacoes}", String.valueOf(auditoria.totalTransacoes()),
+            "{cobradoAMais}",    formatarValor(auditoria.totalCobradoAMais()),
+            "{cobradoAMenos}",   formatarValor(auditoria.totalCobradoAMenos()),
+            "{totalRecebido}",   formatarValor(recebimentos.totalRecebido()),
+            "{totalDescontado}", formatarValor(recebimentos.totalDescontado())
+        );
+
+        String conteudo = template.getConteudo();
+        for (Map.Entry<String, String> entry : valores.entrySet()) {
+            conteudo = conteudo.replace(entry.getKey(), entry.getValue());
+        }
+        return conteudo;
     }
 
     @Transactional
     public MensagemResponse enviar(MensagemEnviarRequest request) {
         Cliente cliente = clienteService.buscarEntidade(request.clienteId());
 
-        // Envia via WhatsApp e persiste no histórico
-        MensagemEnviada mensagem = whatsAppService.enviar(cliente, request.conteudo(), "template");
+        Estabelecimento estabelecimento = null;
+        if (request.estabelecimentoId() != null) {
+            estabelecimento = estabelecimentoService.buscarEntidade(request.estabelecimentoId());
+        }
+
+        Template template = null;
+        if (request.templateId() != null) {
+            template = templateService.buscarEntidade(request.templateId());
+        }
+
+        String modo = request.modoGeracao() != null ? request.modoGeracao() : "template";
+        String templateNome = request.templateNome() != null
+            ? request.templateNome()
+            : (template != null ? template.getNome() : null);
+
+        MensagemEnviada mensagem = whatsAppService.enviar(
+            cliente, request.conteudo(), modo, estabelecimento, template, templateNome
+        );
 
         return toResponse(mensagem);
     }
@@ -100,6 +131,14 @@ public class MensagemService {
             .stream()
             .map(this::toResponse)
             .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<MensagemResponse> mensagensEnviadas(UUID estabelecimentoId, Pageable pageable) {
+        estabelecimentoService.buscarEntidade(estabelecimentoId);
+        return mensagemEnviadaRepository
+            .findByEstabelecimentoIdOrderByEnviadoEmDesc(estabelecimentoId, pageable)
+            .map(this::toResponse);
     }
 
     private String montarPromptAuditoria(Cliente cliente, Estabelecimento est,
@@ -147,8 +186,15 @@ public class MensagemService {
 
     private MensagemResponse toResponse(MensagemEnviada m) {
         return new MensagemResponse(
-            m.getId(), m.getCliente().getId(), m.getConteudo(),
-            m.getModoGeracao(), m.getMetaMessageId(), m.getStatusEntrega(), m.getEnviadoEm()
+            m.getId(),
+            m.getCliente().getId(),
+            m.getConteudo(),
+            m.getModoGeracao(),
+            m.getMetaMessageId(),
+            m.getStatusEntrega(),
+            m.getEnviadoEm(),
+            m.getEstabelecimento() != null ? m.getEstabelecimento().getId() : null,
+            m.getTemplateNome()
         );
     }
 }

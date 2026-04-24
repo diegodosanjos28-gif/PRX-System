@@ -7,5 +7,9 @@ import java.util.UUID;
 
 public record MensagemEnviarRequest(
     @NotNull UUID clienteId,
-    @NotBlank String conteudo
+    @NotBlank String conteudo,
+    UUID estabelecimentoId,  // nullable
+    Long templateId,         // nullable
+    String templateNome,     // nullable, denormalizado para histórico
+    String modoGeracao       // "ia" ou "template", default "template"
 ) {}

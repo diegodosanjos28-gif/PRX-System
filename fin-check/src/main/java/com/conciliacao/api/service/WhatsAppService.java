@@ -1,7 +1,9 @@
 package com.conciliacao.api.service;
 
 import com.conciliacao.api.entity.Cliente;
+import com.conciliacao.api.entity.Estabelecimento;
 import com.conciliacao.api.entity.MensagemEnviada;
+import com.conciliacao.api.entity.Template;
 import com.conciliacao.api.exception.IntegrationException;
 import com.conciliacao.api.repository.MensagemEnviadaRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,12 +34,16 @@ public class WhatsAppService {
     private String baseUrl;
 
     @Transactional
-    public MensagemEnviada enviar(Cliente cliente, String conteudo, String modoGeracao) {
+    public MensagemEnviada enviar(Cliente cliente, String conteudo, String modoGeracao,
+                                   Estabelecimento estabelecimento, Template template,
+                                   String templateNome) {
         String wamid = enviarViaApi(cliente.getWhatsapp(), conteudo);
 
-        // Persiste a mensagem com status inicial 'sent'
         MensagemEnviada mensagem = MensagemEnviada.builder()
             .cliente(cliente)
+            .estabelecimento(estabelecimento)
+            .template(template)
+            .templateNome(templateNome)
             .conteudo(conteudo)
             .modoGeracao(modoGeracao)
             .metaMessageId(wamid)
@@ -65,7 +71,6 @@ public class WhatsAppService {
         try {
             ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
 
-            // Extrai o wamid (message id da Meta) da resposta
             Map<String, Object> responseBody = response.getBody();
             if (responseBody == null) {
                 throw new IntegrationException("Meta API retornou resposta vazia");

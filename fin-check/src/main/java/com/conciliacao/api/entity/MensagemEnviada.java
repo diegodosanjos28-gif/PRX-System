@@ -25,6 +25,17 @@ public class MensagemEnviada {
     @JoinColumn(name = "cliente_id", nullable = false)
     private Cliente cliente;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "estabelecimento_id")
+    private Estabelecimento estabelecimento;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "template_id")
+    private Template template;
+
+    @Column(name = "template_nome")
+    private String templateNome;
+
     @Column(name = "conteudo", columnDefinition = "TEXT", nullable = false)
     private String conteudo;
 

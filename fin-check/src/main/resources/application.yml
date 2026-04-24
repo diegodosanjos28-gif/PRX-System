@@ -40,22 +40,6 @@ meta:
   webhook-secret: ${META_WEBHOOK_SECRET:}
   base-url: https://graph.facebook.com/v19.0
 
-mensagem:
-  template: |
-    Olá {nomeFantasia}!
-
-    Realizamos a auditoria das suas taxas no período de {dataInicio} a {dataFim}.
-
-    Resumo de transações ({estabelecimento}):
-    - Total de transações: {totalTransacoes}
-    - Valor cobrado a mais: R$ {cobradoAMais}
-    - Valor cobrado a menos: R$ {cobradoAMenos}
-
-    Recebimentos no período:
-    - Total recebido: R$ {totalRecebido}
-    - Total descontado em taxas: R$ {totalDescontado}
-
-    Entre em contato para mais informações.
 
 logging:
   level:

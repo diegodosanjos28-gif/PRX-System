@@ -10,6 +10,9 @@ import com.conciliacao.api.service.MensagemService;
 import com.conciliacao.api.service.RecebimentoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -44,5 +47,14 @@ public class MensagemController {
     @GetMapping("/{clienteId}")
     public ResponseEntity<List<MensagemResponse>> historico(@PathVariable UUID clienteId) {
         return ResponseEntity.ok(mensagemService.historico(clienteId));
+    }
+
+    @GetMapping("/enviadas")
+    public ResponseEntity<Page<MensagemResponse>> enviadas(
+            @RequestParam UUID estabelecimentoId,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("enviadoEm").descending());
+        return ResponseEntity.ok(mensagemService.mensagensEnviadas(estabelecimentoId, pageable));
     }
 }
