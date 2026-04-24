@@ -96,4 +96,9 @@ public class ClienteService {
         return clienteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente", id));
     }
+
+    @Transactional(readOnly = true)
+    public List<Cliente> listarEntidadesAtivas() {
+        return clienteRepository.findAllByAtivoTrue();
+    }
 }

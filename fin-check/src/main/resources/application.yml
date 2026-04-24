@@ -35,10 +35,10 @@ anthropic:
   max-tokens: 1500
 
 meta:
-  access-token: ${META_ACCESS_TOKEN:}
-  phone-number-id: ${META_PHONE_NUMBER_ID:}
+  access-token: EAAVaZAftDCgIBRZAiZBRjSLRuKKqd6hA3u56H7N0fuOTijZBUZBByPvXNSNfnjkJNBjjs2z2PZBf4SrMG9n2UZBHTZCvCNbwgiAfB6cWczBpcxYaoDcSAQ0lFfvHHXpbZBur5hKty3LaVyoOG8JlXbONmZByaZAP0WKauWzzb51ZCFK9xcDqtQihJ4L9DeCshx64jNvxKBAulT8AfrFcJ6kGnWJA5NzZAFGuRZCJvFBQV9wfmhAjXJkbDXOV1XOZClYZA4A1c0AGtUv2lPbVzoFb3ZAefRafN
+  phone-number-id: 914156325110895
   webhook-secret: ${META_WEBHOOK_SECRET:}
-  base-url: https://graph.facebook.com/v19.0
+  base-url: https://graph.facebook.com/v25.0
 
 
 logging:

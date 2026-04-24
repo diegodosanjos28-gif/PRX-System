@@ -2,13 +2,16 @@ package com.conciliacao.api.service;
 
 import com.conciliacao.api.dto.request.MensagemEnviarRequest;
 import com.conciliacao.api.dto.request.MensagemGerarRequest;
+import com.conciliacao.api.dto.request.MensagemGerarTodosRequest;
 import com.conciliacao.api.dto.response.AuditoriaResumoResponse;
+import com.conciliacao.api.dto.response.MensagemBulkResultado;
 import com.conciliacao.api.dto.response.MensagemResponse;
 import com.conciliacao.api.dto.response.RecebimentoResumoResponse;
 import com.conciliacao.api.entity.Cliente;
 import com.conciliacao.api.entity.Estabelecimento;
 import com.conciliacao.api.entity.MensagemEnviada;
 import com.conciliacao.api.entity.Template;
+import com.conciliacao.api.repository.EstabelecimentoRepository;
 import com.conciliacao.api.repository.MensagemEnviadaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -35,6 +39,7 @@ public class MensagemService {
     private final ClienteService clienteService;
     private final EstabelecimentoService estabelecimentoService;
     private final TemplateService templateService;
+    private final EstabelecimentoRepository estabelecimentoRepository;
     private final MensagemEnviadaRepository mensagemEnviadaRepository;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -58,44 +63,47 @@ public class MensagemService {
         };
     }
 
-    private String gerarComIA(Cliente cliente, Estabelecimento est,
-                               MensagemGerarRequest req,
-                               AuditoriaResumoResponse auditoria,
-                               RecebimentoResumoResponse recebimentos) {
-        String prompt = montarPromptAuditoria(cliente, est, req, auditoria, recebimentos);
-        log.info("Gerando mensagem via IA para cliente {}", cliente.getId());
-        return anthropicService.gerarMensagem(prompt);
-    }
-
-    private String gerarComTemplate(Cliente cliente, Estabelecimento est,
-                                     MensagemGerarRequest req,
-                                     AuditoriaResumoResponse auditoria,
-                                     RecebimentoResumoResponse recebimentos) {
-        if (req.templateId() == null) {
+    // Gera e envia para todos os clientes e estabelecimentos ativos
+    @Transactional
+    public MensagemBulkResultado gerarParaTodos(MensagemGerarTodosRequest request) {
+        if ("template".equals(request.modo()) && request.templateId() == null) {
             throw new IllegalArgumentException("templateId é obrigatório para o modo 'template'");
         }
 
-        Template template = templateService.buscarEntidade(req.templateId());
-        String nome = cliente.getNomeFantasia() != null ? cliente.getNomeFantasia() : cliente.getRazaoSocial();
+        Template template = request.templateId() != null
+            ? templateService.buscarEntidade(request.templateId())
+            : null;
+        String templateNome = template != null ? template.getNome() : null;
 
-        // Mapa de valores para todas as variáveis de sistema
-        Map<String, String> valores = Map.of(
-            "{nomeFantasia}",    nome,
-            "{dataInicio}",      req.dataInicio().format(FMT),
-            "{dataFim}",         req.dataFim().format(FMT),
-            "{estabelecimento}", est.getDescricao(),
-            "{totalTransacoes}", String.valueOf(auditoria.totalTransacoes()),
-            "{cobradoAMais}",    formatarValor(auditoria.totalCobradoAMais()),
-            "{cobradoAMenos}",   formatarValor(auditoria.totalCobradoAMenos()),
-            "{totalRecebido}",   formatarValor(recebimentos.totalRecebido()),
-            "{totalDescontado}", formatarValor(recebimentos.totalDescontado())
-        );
+        List<Cliente> clientes = clienteService.listarEntidadesAtivas();
+        int total = 0, enviados = 0;
+        List<String> errosDetalhados = new ArrayList<>();
 
-        String conteudo = template.getConteudo();
-        for (Map.Entry<String, String> entry : valores.entrySet()) {
-            conteudo = conteudo.replace(entry.getKey(), entry.getValue());
+        for (Cliente cliente : clientes) {
+            List<Estabelecimento> ests = estabelecimentoRepository.findByClienteIdAndAtivoTrue(cliente.getId());
+            for (Estabelecimento est : ests) {
+                total++;
+                try {
+                    MensagemGerarRequest req = new MensagemGerarRequest(
+                        cliente.getId(), est.getId(),
+                        request.dataInicio(), request.dataFim(),
+                        request.modo(), request.templateId()
+                    );
+                    String conteudo = gerar(req);
+                    whatsAppService.enviar(cliente, conteudo, request.modo(), est, template, templateNome);
+                    enviados++;
+                    log.info("Mensagem em lote enviada: cliente={}, est={}", cliente.getId(), est.getId());
+                } catch (Exception e) {
+                    String nomeCliente = cliente.getNomeFantasia() != null
+                        ? cliente.getNomeFantasia() : cliente.getRazaoSocial();
+                    String msg = nomeCliente + " / " + est.getDescricao() + ": " + e.getMessage();
+                    errosDetalhados.add(msg);
+                    log.error("Erro no envio em lote: {}", msg);
+                }
+            }
         }
-        return conteudo;
+
+        return new MensagemBulkResultado(total, enviados, errosDetalhados.size(), errosDetalhados);
     }
 
     @Transactional
@@ -139,6 +147,45 @@ public class MensagemService {
         return mensagemEnviadaRepository
             .findByEstabelecimentoIdOrderByEnviadoEmDesc(estabelecimentoId, pageable)
             .map(this::toResponse);
+    }
+
+    private String gerarComIA(Cliente cliente, Estabelecimento est,
+                               MensagemGerarRequest req,
+                               AuditoriaResumoResponse auditoria,
+                               RecebimentoResumoResponse recebimentos) {
+        String prompt = montarPromptAuditoria(cliente, est, req, auditoria, recebimentos);
+        log.info("Gerando mensagem via IA para cliente {}", cliente.getId());
+        return anthropicService.gerarMensagem(prompt);
+    }
+
+    private String gerarComTemplate(Cliente cliente, Estabelecimento est,
+                                     MensagemGerarRequest req,
+                                     AuditoriaResumoResponse auditoria,
+                                     RecebimentoResumoResponse recebimentos) {
+        if (req.templateId() == null) {
+            throw new IllegalArgumentException("templateId é obrigatório para o modo 'template'");
+        }
+
+        Template template = templateService.buscarEntidade(req.templateId());
+        String nome = cliente.getNomeFantasia() != null ? cliente.getNomeFantasia() : cliente.getRazaoSocial();
+
+        Map<String, String> valores = Map.of(
+            "{nomeFantasia}",    nome,
+            "{dataInicio}",      req.dataInicio().format(FMT),
+            "{dataFim}",         req.dataFim().format(FMT),
+            "{estabelecimento}", est.getDescricao(),
+            "{totalTransacoes}", String.valueOf(auditoria.totalTransacoes()),
+            "{cobradoAMais}",    formatarValor(auditoria.totalCobradoAMais()),
+            "{cobradoAMenos}",   formatarValor(auditoria.totalCobradoAMenos()),
+            "{totalRecebido}",   formatarValor(recebimentos.totalRecebido()),
+            "{totalDescontado}", formatarValor(recebimentos.totalDescontado())
+        );
+
+        String conteudo = template.getConteudo();
+        for (Map.Entry<String, String> entry : valores.entrySet()) {
+            conteudo = conteudo.replace(entry.getKey(), entry.getValue());
+        }
+        return conteudo;
     }
 
     private String montarPromptAuditoria(Cliente cliente, Estabelecimento est,
@@ -185,9 +232,13 @@ public class MensagemService {
     }
 
     private MensagemResponse toResponse(MensagemEnviada m) {
+        String clienteNome = m.getCliente().getNomeFantasia() != null
+            ? m.getCliente().getNomeFantasia()
+            : m.getCliente().getRazaoSocial();
         return new MensagemResponse(
             m.getId(),
             m.getCliente().getId(),
+            clienteNome,
             m.getConteudo(),
             m.getModoGeracao(),
             m.getMetaMessageId(),

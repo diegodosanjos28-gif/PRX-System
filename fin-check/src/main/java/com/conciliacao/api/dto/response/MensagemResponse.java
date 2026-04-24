@@ -6,6 +6,7 @@ import java.util.UUID;
 public record MensagemResponse(
     UUID id,
     UUID clienteId,
+    String clienteNome,
     String conteudo,
     String modoGeracao,
     String metaMessageId,

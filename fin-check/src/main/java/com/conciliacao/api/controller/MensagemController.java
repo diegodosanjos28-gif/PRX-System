@@ -2,7 +2,9 @@ package com.conciliacao.api.controller;
 
 import com.conciliacao.api.dto.request.MensagemEnviarRequest;
 import com.conciliacao.api.dto.request.MensagemGerarRequest;
+import com.conciliacao.api.dto.request.MensagemGerarTodosRequest;
 import com.conciliacao.api.dto.response.AuditoriaResumoResponse;
+import com.conciliacao.api.dto.response.MensagemBulkResultado;
 import com.conciliacao.api.dto.response.MensagemResponse;
 import com.conciliacao.api.dto.response.RecebimentoResumoResponse;
 import com.conciliacao.api.service.AuditoriaService;
@@ -37,6 +39,11 @@ public class MensagemController {
         RecebimentoResumoResponse resumoRecebimento = recebimentoService.resumo(request.estabelecimentoId(), request.dataInicio(), request.dataFim());
 
         return ResponseEntity.ok(Map.of("mensagem", texto, "resumoAuditoria", resumoAuditoria, "resumoRecebimento", resumoRecebimento));
+    }
+
+    @PostMapping("/gerar-todos")
+    public ResponseEntity<MensagemBulkResultado> gerarTodos(@Valid @RequestBody MensagemGerarTodosRequest request) {
+        return ResponseEntity.ok(mensagemService.gerarParaTodos(request));
     }
 
     @PostMapping("/enviar")
