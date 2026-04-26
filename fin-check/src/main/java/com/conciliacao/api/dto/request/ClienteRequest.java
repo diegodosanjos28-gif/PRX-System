@@ -18,7 +18,7 @@ public record ClienteRequest(
     String cnpj,
 
     @NotBlank(message = "WhatsApp é obrigatório")
-    @Pattern(regexp = "\\d{10,15}", message = "WhatsApp deve conter entre 10 e 15 dígitos numéricos (com DDD e DDI, sem pontuação)")
+    @Size(max = 15, message = "WhatsApp deve conter entre 10 e 15 dígitos numéricos (com DDD e DDI, sem pontuação)")
     String whatsapp,
 
     @NotBlank(message = "Login Conciflex é obrigatório")
