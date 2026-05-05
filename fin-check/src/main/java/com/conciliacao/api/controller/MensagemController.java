@@ -3,13 +3,10 @@ package com.conciliacao.api.controller;
 import com.conciliacao.api.dto.request.MensagemEnviarRequest;
 import com.conciliacao.api.dto.request.MensagemGerarRequest;
 import com.conciliacao.api.dto.request.MensagemGerarTodosRequest;
-import com.conciliacao.api.dto.response.AuditoriaResumoResponse;
 import com.conciliacao.api.dto.response.MensagemBulkResultado;
+import com.conciliacao.api.dto.response.MensagemGerarResultado;
 import com.conciliacao.api.dto.response.MensagemResponse;
-import com.conciliacao.api.dto.response.RecebimentoResumoResponse;
-import com.conciliacao.api.service.AuditoriaService;
 import com.conciliacao.api.service.MensagemService;
-import com.conciliacao.api.service.RecebimentoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -18,34 +15,54 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Endpoints de geração e envio de mensagens WhatsApp.
+ *
+ * <p>Este controller é intencionalmente fino: toda a lógica de negócio
+ * (geração de texto, parâmetros de template, envio via Meta API) está
+ * encapsulada em {@link MensagemService}.
+ */
 @RestController
 @RequestMapping("/api/mensagens")
 @RequiredArgsConstructor
 public class MensagemController {
 
     private final MensagemService mensagemService;
-    private final AuditoriaService auditoriaService;
-    private final RecebimentoService recebimentoService;
 
+    /**
+     * Gera a mensagem sem enviar — retorna texto renderizado, resumos financeiros e os
+     * {@code templateParametros} que o frontend deve armazenar e repassar ao {@code /enviar}.
+     */
     @PostMapping("/gerar")
     public ResponseEntity<Map<String, Object>> gerar(@Valid @RequestBody MensagemGerarRequest request) {
-        String texto = mensagemService.gerar(request);
+        // resumoAuditoria e resumoRecebimento já estão no resultado — calculados uma única vez no service
+        MensagemGerarResultado resultado = mensagemService.gerar(request);
 
-        AuditoriaResumoResponse resumoAuditoria = auditoriaService.resumo(request.estabelecimentoId(), request.dataInicio(), request.dataFim());
-        RecebimentoResumoResponse resumoRecebimento = recebimentoService.resumo(request.estabelecimentoId(), request.dataInicio(), request.dataFim());
-
-        return ResponseEntity.ok(Map.of("mensagem", texto, "resumoAuditoria", resumoAuditoria, "resumoRecebimento", resumoRecebimento));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("mensagem",           resultado.conteudo());
+        body.put("resumoAuditoria",    resultado.resumoAuditoria());
+        body.put("resumoRecebimento",  resultado.resumoRecebimento());
+        body.put("templateParametros", resultado.templateParametros());
+        return ResponseEntity.ok(body);
     }
 
+    /** Gera e envia para todos os clientes/estabelecimentos ativos sem revisão individual. */
     @PostMapping("/gerar-todos")
     public ResponseEntity<MensagemBulkResultado> gerarTodos(@Valid @RequestBody MensagemGerarTodosRequest request) {
         return ResponseEntity.ok(mensagemService.gerarParaTodos(request));
     }
 
+    /**
+     * Envia a mensagem revisada pelo operador.
+     *
+     * <p>O campo {@code templateParametros} deve conter o mapa retornado pelo {@code /gerar}
+     * para que os parâmetros posicionais sejam corretamente preenchidos na Meta API.
+     */
     @PostMapping("/enviar")
     public ResponseEntity<MensagemResponse> enviar(@Valid @RequestBody MensagemEnviarRequest request) {
         return ResponseEntity.ok(mensagemService.enviar(request));

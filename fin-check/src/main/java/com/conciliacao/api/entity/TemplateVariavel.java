@@ -4,7 +4,10 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "template_variaveis")
+@Table(
+    name = "template_variaveis",
+    uniqueConstraints = @UniqueConstraint(name = "uq_tv_template_ordem", columnNames = {"template_id", "ordem"})
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -16,7 +19,7 @@ public class TemplateVariavel {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(nullable = false, length = 100)
     private String chave;
 
     @Column(nullable = false)
@@ -25,6 +28,9 @@ public class TemplateVariavel {
     @Column(name = "sistema_fixo", nullable = false)
     @Builder.Default
     private boolean sistemaFixo = false;
+
+    @Column(nullable = false)
+    private int ordem;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "template_id")

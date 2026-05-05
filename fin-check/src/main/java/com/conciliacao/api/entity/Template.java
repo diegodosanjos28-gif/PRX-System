@@ -25,6 +25,9 @@ public class Template {
     @Column(nullable = false)
     private String nome;
 
+    @Column(name = "meta_id")
+    private String metaId;
+
     @Column(columnDefinition = "TEXT", nullable = false)
     private String conteudo;
 

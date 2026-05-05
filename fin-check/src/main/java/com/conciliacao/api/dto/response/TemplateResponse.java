@@ -6,6 +6,7 @@ import java.util.List;
 public record TemplateResponse(
     Long id,
     String nome,
+    String metaId,
     String conteudo,
     boolean ativo,
     List<TemplateVariavelResponse> variaveis,

@@ -8,7 +8,12 @@ import java.util.List;
 public interface TemplateVariavelRepository extends JpaRepository<TemplateVariavel, Long> {
     List<TemplateVariavel> findAllByOrderByChaveAsc();
     List<TemplateVariavel> findByTemplateIsNullOrderByChaveAsc();
-    List<TemplateVariavel> findByTemplateIdOrderByChaveAsc(Long templateId);
-    boolean existsByChave(String chave);
-    boolean existsByChaveAndIdNot(String chave, Long id);
+    List<TemplateVariavel> findByTemplateIdOrderByOrdemAsc(Long templateId);
+    // Global variable (template_id IS NULL) uniqueness checks
+    boolean existsByChaveAndTemplateIsNull(String chave);
+    boolean existsByChaveAndTemplateIsNullAndIdNot(String chave, Long id);
+
+    // Template-specific variable uniqueness within the same template
+    boolean existsByChaveAndTemplateId(String chave, Long templateId);
+    boolean existsByChaveAndTemplateIdAndIdNot(String chave, Long templateId, Long id);
 }

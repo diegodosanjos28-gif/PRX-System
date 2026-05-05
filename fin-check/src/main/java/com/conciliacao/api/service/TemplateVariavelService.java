@@ -33,13 +33,12 @@ public class TemplateVariavelService {
 
     @Transactional
     public TemplateVariavelResponse criar(TemplateVariavelRequest request) {
-        if (repository.existsByChave(request.chave())) {
-            throw new ConflictException("Já existe uma variável com a chave " + request.chave());
-        }
+        checkChaveDisponivel(request.chave(), request.templateId(), null);
 
         TemplateVariavel variavel = new TemplateVariavel();
         variavel.setChave(request.chave());
         variavel.setDescricao(request.descricao());
+        variavel.setOrdem(request.ordem());
         variavel.setSistemaFixo(false);
 
         if (request.templateId() != null) {
@@ -54,13 +53,11 @@ public class TemplateVariavelService {
     @Transactional
     public TemplateVariavelResponse atualizar(Long id, TemplateVariavelRequest request) {
         TemplateVariavel variavel = buscarEntidade(id);
-
-        if (repository.existsByChaveAndIdNot(request.chave(), id)) {
-            throw new ConflictException("Já existe uma variável com a chave " + request.chave());
-        }
+        checkChaveDisponivel(request.chave(), request.templateId(), id);
 
         variavel.setChave(request.chave());
         variavel.setDescricao(request.descricao());
+        variavel.setOrdem(request.ordem());
 
         if (request.templateId() != null) {
             Template template = templateRepository.findById(request.templateId())
@@ -71,6 +68,22 @@ public class TemplateVariavelService {
         }
 
         return toResponse(repository.save(variavel));
+    }
+
+    // Global variables must have a unique chave among globals.
+    // Template-specific variables must have a unique chave within their own template.
+    private void checkChaveDisponivel(String chave, Long templateId, Long excludeId) {
+        boolean conflict = (templateId == null)
+            ? (excludeId == null
+                ? repository.existsByChaveAndTemplateIsNull(chave)
+                : repository.existsByChaveAndTemplateIsNullAndIdNot(chave, excludeId))
+            : (excludeId == null
+                ? repository.existsByChaveAndTemplateId(chave, templateId)
+                : repository.existsByChaveAndTemplateIdAndIdNot(chave, templateId, excludeId));
+        if (conflict) {
+            throw new ConflictException("Já existe uma variável com a chave " + chave
+                + (templateId != null ? " neste template" : " nas variáveis globais"));
+        }
     }
 
     @Transactional
@@ -89,7 +102,7 @@ public class TemplateVariavelService {
 
     TemplateVariavelResponse toResponse(TemplateVariavel v) {
         return new TemplateVariavelResponse(
-            v.getId(), v.getChave(), v.getDescricao(), v.isSistemaFixo(),
+            v.getId(), v.getChave(), v.getDescricao(), v.isSistemaFixo(), v.getOrdem(),
             v.getTemplate() != null ? v.getTemplate().getId() : null
         );
     }

@@ -5,5 +5,6 @@ public record TemplateVariavelResponse(
     String chave,
     String descricao,
     boolean sistemaFixo,
+    int ordem,
     Long templateId
 ) {}
