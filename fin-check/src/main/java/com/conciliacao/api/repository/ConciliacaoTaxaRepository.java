@@ -62,4 +62,16 @@ public interface ConciliacaoTaxaRepository extends JpaRepository<ConciliacaoTaxa
         UUID estabelecimentoId, LocalDate inicio, LocalDate fim
     );
 
+    @Query("""
+        SELECT COALESCE(SUM(ct.taxaPraticadaRs), 0)
+        FROM ConciliacaoTaxa ct
+        WHERE ct.estabelecimento.id = :estabelecimentoId
+          AND ct.dataVenda BETWEEN :inicio AND :fim
+        """)
+    BigDecimal sumTaxaPraticadaRs(
+        @Param("estabelecimentoId") UUID estabelecimentoId,
+        @Param("inicio") LocalDate inicio,
+        @Param("fim") LocalDate fim
+    );
+
 }

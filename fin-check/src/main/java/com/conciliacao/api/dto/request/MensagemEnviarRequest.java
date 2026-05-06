@@ -34,5 +34,7 @@ public record MensagemEnviarRequest(
     Long                          templateId,
     String                        templateNome,
     String                        modoGeracao,
-    Map<String, String>           templateParametros
+    Map<String, String>           templateParametros,
+    /** Optional Meta access token — overrides the server-configured token when provided. */
+    String                        metaAccessToken
 ) {}

@@ -4,7 +4,6 @@ import com.conciliacao.api.dto.request.TemplateVariavelRequest;
 import com.conciliacao.api.dto.response.TemplateVariavelResponse;
 import com.conciliacao.api.entity.Template;
 import com.conciliacao.api.entity.TemplateVariavel;
-import com.conciliacao.api.exception.ConflictException;
 import com.conciliacao.api.exception.ResourceNotFoundException;
 import com.conciliacao.api.repository.TemplateRepository;
 import com.conciliacao.api.repository.TemplateVariavelRepository;
@@ -33,8 +32,6 @@ public class TemplateVariavelService {
 
     @Transactional
     public TemplateVariavelResponse criar(TemplateVariavelRequest request) {
-        checkChaveDisponivel(request.chave(), request.templateId(), null);
-
         TemplateVariavel variavel = new TemplateVariavel();
         variavel.setChave(request.chave());
         variavel.setDescricao(request.descricao());
@@ -53,7 +50,6 @@ public class TemplateVariavelService {
     @Transactional
     public TemplateVariavelResponse atualizar(Long id, TemplateVariavelRequest request) {
         TemplateVariavel variavel = buscarEntidade(id);
-        checkChaveDisponivel(request.chave(), request.templateId(), id);
 
         variavel.setChave(request.chave());
         variavel.setDescricao(request.descricao());
@@ -68,22 +64,6 @@ public class TemplateVariavelService {
         }
 
         return toResponse(repository.save(variavel));
-    }
-
-    // Global variables must have a unique chave among globals.
-    // Template-specific variables must have a unique chave within their own template.
-    private void checkChaveDisponivel(String chave, Long templateId, Long excludeId) {
-        boolean conflict = (templateId == null)
-            ? (excludeId == null
-                ? repository.existsByChaveAndTemplateIsNull(chave)
-                : repository.existsByChaveAndTemplateIsNullAndIdNot(chave, excludeId))
-            : (excludeId == null
-                ? repository.existsByChaveAndTemplateId(chave, templateId)
-                : repository.existsByChaveAndTemplateIdAndIdNot(chave, templateId, excludeId));
-        if (conflict) {
-            throw new ConflictException("Já existe uma variável com a chave " + chave
-                + (templateId != null ? " neste template" : " nas variáveis globais"));
-        }
     }
 
     @Transactional

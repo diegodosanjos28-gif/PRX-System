@@ -7,11 +7,14 @@ import com.conciliacao.api.dto.response.AuditoriaResumoResponse;
 import com.conciliacao.api.dto.response.MensagemBulkResultado;
 import com.conciliacao.api.dto.response.MensagemGerarResultado;
 import com.conciliacao.api.dto.response.MensagemResponse;
+import com.conciliacao.api.dto.response.RecebimentoPorBandeira;
+import com.conciliacao.api.dto.response.RecebimentoResponse;
 import com.conciliacao.api.dto.response.RecebimentoResumoResponse;
 import com.conciliacao.api.entity.Cliente;
 import com.conciliacao.api.entity.Estabelecimento;
 import com.conciliacao.api.entity.MensagemEnviada;
 import com.conciliacao.api.entity.Template;
+import com.conciliacao.api.repository.ConciliacaoTaxaRepository;
 import com.conciliacao.api.repository.EstabelecimentoRepository;
 import com.conciliacao.api.repository.MensagemEnviadaRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,12 +25,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.Normalizer;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Orquestra o ciclo de vida de uma mensagem: geração (via IA ou template) e envio via WhatsApp.
@@ -55,6 +62,7 @@ public class MensagemService {
     private final TemplateService templateService;
     private final EstabelecimentoRepository estabelecimentoRepository;
     private final MensagemEnviadaRepository mensagemEnviadaRepository;
+    private final ConciliacaoTaxaRepository conciliacaoTaxaRepository;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -137,7 +145,8 @@ public class MensagemService {
                     // templateParametros gerado em gerar() é repassado diretamente para o WhatsApp
                     whatsAppService.enviar(
                         cliente, resultado.conteudo(), request.modo(),
-                        est, template, templateNome, resultado.templateParametros()
+                        est, template, templateNome, resultado.templateParametros(),
+                        request.metaAccessToken()
                     );
                     enviados++;
                     log.info("Envio em lote OK: clienteId={}, estId={}", cliente.getId(), est.getId());
@@ -195,7 +204,7 @@ public class MensagemService {
 
         MensagemEnviada mensagem = whatsAppService.enviar(
             cliente, request.conteudo(), modo, estabelecimento, template, templateNome,
-            request.templateParametros()
+            request.templateParametros(), request.metaAccessToken()
         );
 
         log.info("Mensagem enviada com sucesso: wamid={}, clienteId={}", mensagem.getMetaMessageId(), cliente.getId());
@@ -254,10 +263,43 @@ public class MensagemService {
         log.info("Gerando mensagem via template: templateId={}, nome={}", template.getId(), template.getNome());
 
         String nome = cliente.getNomeFantasia() != null ? cliente.getNomeFantasia() : cliente.getRazaoSocial();
+        List<RecebimentoResponse> recs = recebimentos.recebimentos();
+
+        // ── totalizadores por modalidade (computed in-memory from fetched recebimentos) ──
+        BigDecimal totalValorBruto = somarValorBruto(recs);
+        BigDecimal totalCredito    = somarPorModalidade(recs, "credit");
+        BigDecimal totalDebito     = somarPorModalidade(recs, "debit");
+        BigDecimal totalVouchers   = somarPorModalidade(recs, "voucher");
+        BigDecimal totalPix        = somarPorModalidade(recs, "pix");
+        BigDecimal mediaVendas     = recs.isEmpty() ? BigDecimal.ZERO
+            : totalValorBruto.divide(BigDecimal.valueOf(recs.size()), 2, RoundingMode.HALF_UP);
+
+        BigDecimal totalTaxaPraticadaRS = coalesceZero(
+            conciliacaoTaxaRepository.sumTaxaPraticadaRs(est.getId(), req.dataInicio(), req.dataFim())
+        );
+
+        // ── operadoras ordenadas por volume total bruto ────────────────────
+        List<Map.Entry<String, BigDecimal>> operadorasOrdenadas = recs.stream()
+            .filter(r -> r.adquirente() != null)
+            .collect(Collectors.groupingBy(
+                RecebimentoResponse::adquirente,
+                Collectors.reducing(BigDecimal.ZERO,
+                    r -> r.valorBruto() != null ? r.valorBruto() : BigDecimal.ZERO,
+                    BigDecimal::add)
+            ))
+            .entrySet().stream()
+            .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
+            .toList();
+
+        String bandeiraMaisPassada = recebimentos.porBandeira().stream()
+            .max(Comparator.comparingLong(RecebimentoPorBandeira::quantidade))
+            .map(RecebimentoPorBandeira::bandeira)
+            .orElse("-");
 
         // Chaves devem corresponder exatamente ao campo `chave` cadastrado em template_variaveis.
         // Esses valores serão repassados à Meta API como parâmetros posicionais {{1}}, {{2}}, etc.
         Map<String, String> valores = new LinkedHashMap<>();
+        // ── variáveis originais ────────────────────────────────────────────
         valores.put("nomeFantasia",    nome);
         valores.put("dataInicio",      req.dataInicio().format(FMT));
         valores.put("dataFim",         req.dataFim().format(FMT));
@@ -267,8 +309,40 @@ public class MensagemService {
         valores.put("cobradoAMenos",   formatarValor(auditoria.totalCobradoAMenos()));
         valores.put("totalRecebido",   formatarValor(recebimentos.totalRecebido()));
         valores.put("totalDescontado", formatarValor(recebimentos.totalDescontado()));
+        // ── novas variáveis ────────────────────────────────────────────────
+        valores.put("cliente",               nome);
+        valores.put("telefone",              cliente.getWhatsapp());
+        valores.put("data",                  req.dataFim().format(FMT));
+        valores.put("templateName",          template.getNome());
+        valores.put("templateOperadorasQtd", String.valueOf(operadorasOrdenadas.size()));
+        valores.put("totalValorBruto",       formatarValor(totalValorBruto));
+        valores.put("totalTaxaPraticadaRS",  formatarValor(totalTaxaPraticadaRS));
+        valores.put("liquidoPrevisto",       formatarValor(recebimentos.totalRecebido()));
+        valores.put("totalCredito",          formatarValor(totalCredito));
+        valores.put("totalDebito",           formatarValor(totalDebito));
+        valores.put("totalVouchers",         formatarValor(totalVouchers));
+        valores.put("totalPix",              formatarValor(totalPix));
+        valores.put("mediaVendas",           formatarValor(mediaVendas));
+        for (int i = 0; i < 4; i++) {
+            String idx = String.valueOf(i + 1);
+            if (i < operadorasOrdenadas.size()) {
+                valores.put("operadora" + idx + "Nome",  operadorasOrdenadas.get(i).getKey());
+                valores.put("operadora" + idx + "Total", formatarValor(operadorasOrdenadas.get(i).getValue()));
+            } else {
+                valores.put("operadora" + idx + "Nome",  "-");
+                valores.put("operadora" + idx + "Total", "0,00");
+            }
+        }
+        valores.put("operadoraMaisUsada",  operadorasOrdenadas.isEmpty() ? "-" : operadorasOrdenadas.get(0).getKey());
+        valores.put("bandeiraMaisPassada", bandeiraMaisPassada);
+        valores.put("totalCreditoVisa",    formatarValor(somarPorModalidadeEBandeira(recs, "credit", "visa")));
+        valores.put("totalCreditoMaster",  formatarValor(somarPorModalidadeEBandeira(recs, "credit", "master")));
+        valores.put("totalCreditoElo",     formatarValor(somarPorModalidadeEBandeira(recs, "credit", "elo")));
+        valores.put("totalDebitoVisa",     formatarValor(somarPorModalidadeEBandeira(recs, "debit", "visa")));
+        valores.put("totalDebitoMaster",   formatarValor(somarPorModalidadeEBandeira(recs, "debit", "master")));
+        valores.put("totalDebitoElo",      formatarValor(somarPorModalidadeEBandeira(recs, "debit", "elo")));
 
-        log.debug("Parâmetros do template calculados: {}", valores);
+        log.debug("Parâmetros do template calculados: {} chaves", valores.size());
 
         String conteudo = template.getConteudo();
         for (Map.Entry<String, String> entry : valores.entrySet()) {
@@ -322,6 +396,39 @@ public class MensagemService {
     private String formatarValor(BigDecimal valor) {
         if (valor == null) return "0,00";
         return String.format("%.2f", valor).replace(".", ",");
+    }
+
+    private static BigDecimal coalesceZero(BigDecimal val) {
+        return val != null ? val : BigDecimal.ZERO;
+    }
+
+    private static BigDecimal somarValorBruto(List<RecebimentoResponse> recs) {
+        return recs.stream()
+            .map(r -> r.valorBruto() != null ? r.valorBruto() : BigDecimal.ZERO)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** Normalizes accented Portuguese strings for case-insensitive fragment matching. */
+    private static String normalizar(String s) {
+        if (s == null) return "";
+        return Normalizer.normalize(s.toLowerCase(), Normalizer.Form.NFD)
+            .replaceAll("[\\p{InCombiningDiacriticalMarks}]", "");
+    }
+
+    private static BigDecimal somarPorModalidade(List<RecebimentoResponse> recs, String frag) {
+        return recs.stream()
+            .filter(r -> normalizar(r.modalidade()).contains(frag))
+            .map(r -> r.valorBruto() != null ? r.valorBruto() : BigDecimal.ZERO)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private static BigDecimal somarPorModalidadeEBandeira(List<RecebimentoResponse> recs,
+                                                           String modalidadeFrag, String bandeiraFrag) {
+        return recs.stream()
+            .filter(r -> normalizar(r.modalidade()).contains(modalidadeFrag)
+                      && normalizar(r.bandeira()).contains(bandeiraFrag))
+            .map(r -> r.valorBruto() != null ? r.valorBruto() : BigDecimal.ZERO)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private MensagemResponse toResponse(MensagemEnviada m) {

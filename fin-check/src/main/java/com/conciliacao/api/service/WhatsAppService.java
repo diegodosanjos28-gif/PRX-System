@@ -68,19 +68,24 @@ public class WhatsAppService {
     /**
      * Envia a mensagem via Meta Cloud API e persiste o registro no banco.
      *
-     * @param parametros mapa {@code chave → valor} dos parâmetros posicionais do template.
-     *                   {@code null} para modo IA ou templates sem {@code metaId}.
+     * @param parametros    mapa {@code chave → valor} dos parâmetros posicionais do template.
+     *                      {@code null} para modo IA ou templates sem {@code metaId}.
+     * @param tokenOverride token Meta informado pelo operador no momento do envio.
+     *                      Quando {@code null} ou em branco usa o token configurado no servidor.
      */
     @Transactional
     public MensagemEnviada enviar(Cliente cliente, String conteudo, String modoGeracao,
                                    Estabelecimento estabelecimento, Template template,
-                                   String templateNome, Map<String, String> parametros) {
-        log.info("Preparando envio WhatsApp: numero={}, template={}, parametrosPresentes={}",
+                                   String templateNome, Map<String, String> parametros,
+                                   String tokenOverride) {
+        String tokenToUse = (tokenOverride != null && !tokenOverride.isBlank()) ? tokenOverride : accessToken;
+
+        log.info("Preparando envio WhatsApp: numero={}, template={}, token={}",
             cliente.getWhatsapp(),
             template != null ? template.getNome() : "nenhum",
-            parametros != null && !parametros.isEmpty());
+            tokenOverride != null && !tokenOverride.isBlank() ? "override do operador" : "configurado no servidor");
 
-        String wamid = enviarViaApi(cliente.getWhatsapp(), conteudo, template, parametros);
+        String wamid = enviarViaApi(cliente.getWhatsapp(), conteudo, template, parametros, tokenToUse);
 
         MensagemEnviada mensagem = MensagemEnviada.builder()
             .cliente(cliente)
@@ -97,11 +102,11 @@ public class WhatsAppService {
     }
 
     private String enviarViaApi(String numeroDestino, String conteudo, Template template,
-                                 Map<String, String> parametros) {
+                                 Map<String, String> parametros, String tokenToUse) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(accessToken);
+            headers.setBearerAuth(tokenToUse);
 
             Map<String, Object> body;
             if (template != null && template.getMetaId() != null && !template.getMetaId().isBlank()) {
