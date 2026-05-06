@@ -1,0 +1,1 @@
+ALTER TABLE templates ADD COLUMN meta_id VARCHAR(255);
