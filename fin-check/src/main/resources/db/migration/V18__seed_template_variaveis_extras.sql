@@ -1,0 +1,33 @@
+-- Additional system template variables for richer message templates.
+-- Keys here match the bare key names used in MensagemService.gerarComTemplate()
+-- (without braces). Braces in `chave` are the catalog display format used in V13.
+INSERT INTO template_variaveis (chave, descricao, sistema_fixo, ordem) VALUES
+    ('{cliente}',               'Nome fantasia ou razão social do cliente',              true, 10),
+    ('{telefone}',              'Telefone/WhatsApp do cliente',                          true, 11),
+    ('{data}',                  'Data de referência (fim do período analisado)',          true, 12),
+    ('{templateName}',          'Nome do template utilizado',                            true, 13),
+    ('{templateOperadorasQtd}', 'Quantidade de operadoras com transações no período',    true, 14),
+    ('{totalValorBruto}',       'Soma do valor bruto de todas as transações',            true, 15),
+    ('{totalTaxaPraticadaRS}',  'Soma das taxas praticadas em R$ (conciliação)',         true, 16),
+    ('{liquidoPrevisto}',       'Valor líquido previsto a receber (total recebido)',     true, 17),
+    ('{totalCredito}',          'Total bruto das transações de crédito',                 true, 18),
+    ('{totalDebito}',           'Total bruto das transações de débito',                  true, 19),
+    ('{totalVouchers}',         'Total bruto das transações de voucher',                 true, 20),
+    ('{totalPix}',              'Total bruto das transações via Pix',                    true, 21),
+    ('{mediaVendas}',           'Valor médio por transação no período',                  true, 22),
+    ('{operadora1Nome}',        'Nome da 1ª operadora por volume (maior volume)',         true, 23),
+    ('{operadora1Total}',       'Volume total da 1ª operadora',                          true, 24),
+    ('{operadora2Nome}',        'Nome da 2ª operadora por volume',                       true, 25),
+    ('{operadora2Total}',       'Volume total da 2ª operadora',                          true, 26),
+    ('{operadora3Nome}',        'Nome da 3ª operadora por volume',                       true, 27),
+    ('{operadora3Total}',       'Volume total da 3ª operadora',                          true, 28),
+    ('{operadora4Nome}',        'Nome da 4ª operadora por volume',                       true, 29),
+    ('{operadora4Total}',       'Volume total da 4ª operadora',                          true, 30),
+    ('{operadoraMaisUsada}',    'Operadora com maior volume bruto no período',            true, 31),
+    ('{bandeiraMaisPassada}',   'Bandeira com maior número de transações',               true, 32),
+    ('{totalCreditoVisa}',      'Total bruto de crédito Visa',                           true, 33),
+    ('{totalCreditoMaster}',    'Total bruto de crédito Mastercard',                     true, 34),
+    ('{totalCreditoElo}',       'Total bruto de crédito Elo',                            true, 35),
+    ('{totalDebitoVisa}',       'Total bruto de débito Visa',                            true, 36),
+    ('{totalDebitoMaster}',     'Total bruto de débito Mastercard',                      true, 37),
+    ('{totalDebitoElo}',        'Total bruto de débito Elo',                             true, 38);
