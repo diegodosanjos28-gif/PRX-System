@@ -80,12 +80,26 @@ public class WhatsAppService {
                                    String tokenOverride) {
         String tokenToUse = (tokenOverride != null && !tokenOverride.isBlank()) ? tokenOverride : accessToken;
 
-        log.info("Preparando envio WhatsApp: numero={}, template={}, token={}",
+        log.info("Iniciando envio WhatsApp: clienteId={}, numero={}, modoGeracao={}, templateNome={}, templateMetaId={}, estabelecimentoId={}, parametrosCount={}, token={}",
+            cliente.getId(),
             cliente.getWhatsapp(),
-            template != null ? template.getNome() : "nenhum",
+            modoGeracao,
+            templateNome != null ? templateNome : "nenhum",
+            template != null && template.getMetaId() != null ? template.getMetaId() : "nenhum",
+            estabelecimento != null ? estabelecimento.getId() : "nenhum",
+            parametros != null ? parametros.size() : 0,
             tokenOverride != null && !tokenOverride.isBlank() ? "override do operador" : "configurado no servidor");
 
+        log.debug("Conteúdo da mensagem (primeiros 200 chars): {}",
+            conteudo != null && conteudo.length() > 200 ? conteudo.substring(0, 200) + "..." : conteudo);
+
+        if (parametros != null && !parametros.isEmpty()) {
+            log.debug("Parâmetros do template: {}", parametros);
+        }
+
         String wamid = enviarViaApi(cliente.getWhatsapp(), conteudo, template, parametros, tokenToUse);
+
+        log.info("Persistindo mensagem enviada: clienteId={}, wamid={}, modoGeracao={}", cliente.getId(), wamid, modoGeracao);
 
         MensagemEnviada mensagem = MensagemEnviada.builder()
             .cliente(cliente)
@@ -98,7 +112,9 @@ public class WhatsAppService {
             .statusEntrega("sent")
             .build();
 
-        return mensagemEnviadaRepository.save(mensagem);
+        MensagemEnviada salva = mensagemEnviadaRepository.save(mensagem);
+        log.info("Mensagem persistida com sucesso: mensagemId={}, clienteId={}, wamid={}", salva.getId(), cliente.getId(), wamid);
+        return salva;
     }
 
     private String enviarViaApi(String numeroDestino, String conteudo, Template template,
@@ -110,10 +126,10 @@ public class WhatsAppService {
 
             Map<String, Object> body;
             if (template != null && template.getMetaId() != null && !template.getMetaId().isBlank()) {
-                log.info("Enviando como template registrado na Meta: metaId={}", template.getMetaId());
+                log.info("Modo de envio: template registrado na Meta — templateId={}, metaId={}, numero={}", template.getId(), template.getMetaId(), numeroDestino);
                 body = buildTemplatePayload(numeroDestino, template, parametros);
             } else {
-                log.info("Enviando como mensagem de texto livre para: {}", numeroDestino);
+                log.info("Modo de envio: texto livre — numero={}", numeroDestino);
                 body = Map.of(
                     "messaging_product", "whatsapp",
                     "to",   numeroDestino,
@@ -125,26 +141,34 @@ public class WhatsAppService {
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
             String url = baseUrl + "/" + phoneNumberId + "/messages";
 
+            log.info("Chamando Meta API: url={}, phoneNumberId={}", url, phoneNumberId);
+            log.debug("Payload enviado à Meta API: {}", body);
+
             ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
+
+            log.info("Resposta da Meta API: status={}", response.getStatusCode());
+            log.debug("Body da resposta Meta API: {}", response.getBody());
 
             Map<String, Object> responseBody = response.getBody();
             if (responseBody == null) {
+                log.error("Meta API retornou resposta vazia para numero={}", numeroDestino);
                 throw new IntegrationException("Meta API retornou resposta vazia");
             }
 
             var messages = (List<Map<String, Object>>) responseBody.get("messages");
             if (messages == null || messages.isEmpty()) {
+                log.error("Meta API não retornou ID da mensagem para numero={}, responseBody={}", numeroDestino, responseBody);
                 throw new IntegrationException("Meta API não retornou ID da mensagem");
             }
 
             String wamid = (String) messages.get(0).get("id");
-            log.info("Mensagem WhatsApp enviada: numero={}, wamid={}", numeroDestino, wamid);
+            log.info("Mensagem WhatsApp enviada com sucesso: numero={}, wamid={}", numeroDestino, wamid);
             return wamid;
 
         } catch (IntegrationException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Erro ao enviar mensagem WhatsApp: {}", e.getMessage(), e);
+            log.error("Erro ao enviar mensagem WhatsApp: numero={}, erro={}", numeroDestino, e.getMessage(), e);
             throw new IntegrationException("Falha no envio via WhatsApp: " + e.getMessage(), e);
         }
     }
@@ -221,10 +245,17 @@ public class WhatsAppService {
      */
     @Transactional
     public void atualizarStatus(String metaMessageId, String novoStatus) {
-        mensagemEnviadaRepository.findByMetaMessageId(metaMessageId).ifPresent(msg -> {
+        log.info("Atualizando status via webhook: wamid={}, novoStatus={}", metaMessageId, novoStatus);
+        var encontrada = mensagemEnviadaRepository.findByMetaMessageId(metaMessageId);
+        if (encontrada.isEmpty()) {
+            log.warn("Webhook recebido para wamid desconhecido: wamid={}, status={}", metaMessageId, novoStatus);
+            return;
+        }
+        encontrada.ifPresent(msg -> {
+            String statusAnterior = msg.getStatusEntrega();
             msg.setStatusEntrega(novoStatus);
             mensagemEnviadaRepository.save(msg);
-            log.info("Status da mensagem {} atualizado para: {}", metaMessageId, novoStatus);
+            log.info("Status atualizado: mensagemId={}, wamid={}, statusAnterior={}, novoStatus={}", msg.getId(), metaMessageId, statusAnterior, novoStatus);
         });
     }
 }
