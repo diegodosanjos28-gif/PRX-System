@@ -32,6 +32,8 @@ export default function EditarClientePage() {
             cnpj: cliente.cnpj,
             whatsapp: cliente.whatsapp,
             observacoes: cliente.observacoes,
+            conciflexLogin: cliente.conciflexLogin,
+            conciflexSenha: cliente.conciflexSenha,
           }}
           onSubmit={onSubmit}
           isPending={isPending}

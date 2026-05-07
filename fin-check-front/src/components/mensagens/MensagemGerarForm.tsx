@@ -17,7 +17,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -34,6 +33,11 @@ import {
   KeyRound,
   Pencil,
   Users,
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  ReceiptText,
+  BadgeDollarSign,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { MensagemEnviada, MensagemGeradaResponse } from '@/lib/types/entities';
@@ -85,14 +89,6 @@ function maskPhone(phone: string): string {
 
 // ─── interfaces ──────────────────────────────────────────────────────────────
 
-/**
- * Estado local de uma mensagem gerada, pendente de revisão e envio.
- *
- * `templateParametros` é o mapa { chave → valor } retornado pelo /gerar
- * (ex.: { nomeFantasia: "Empresa X", cobradoAMais: "1.200,00" }).
- * Deve ser preservado intacto e reenviado em onEnviar para que o backend
- * preencha os parâmetros posicionais {{1}}, {{2}}, ... na Meta API.
- */
 interface ResultadoItem {
   estabelecimentoId: string;
   descricao: string;
@@ -103,7 +99,6 @@ interface ResultadoItem {
 
 // ─── sub-components ──────────────────────────────────────────────────────────
 
-/** Renders template text with {placeholder} chips */
 function TemplatePlaceholderText({ content }: { content: string }) {
   const parts = content.split(/(\{[^}]+\})/g);
   return (
@@ -129,7 +124,6 @@ function TemplatePlaceholderText({ content }: { content: string }) {
   );
 }
 
-/** 3-step progress bar */
 function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
   const labels = ['Configurar', 'Revisar mensagem', 'Enviado'];
   return (
@@ -160,7 +154,6 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
   );
 }
 
-/** Editable textarea with pencil, copy and char-count */
 function MensagemEditor({
   conteudo,
   pulsing,
@@ -196,7 +189,6 @@ function MensagemEditor({
   return (
     <div className="space-y-1">
       <div className="relative">
-        {/* top-right action bar */}
         <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
           <button
             type="button"
@@ -233,76 +225,216 @@ function MensagemEditor({
   );
 }
 
-/** Audit summary cards — shown in modal */
-function AuditoriaSummary({ resultado }: { resultado: MensagemGeradaResponse }) {
+// ── Metric card used in the inline dashboard ──────────────────────────────────
+
+type MetricVariant = 'default' | 'danger' | 'warning' | 'success' | 'accent';
+
+function MetricCard({
+  label,
+  value,
+  icon: Icon,
+  variant = 'default',
+}: {
+  label: string;
+  value: string | number;
+  icon?: React.ElementType;
+  variant?: MetricVariant;
+}) {
+  const wrapperCls: Record<MetricVariant, string> = {
+    default: 'bg-card border',
+    danger:  'bg-red-50 border-red-200',
+    warning: 'bg-amber-50 border-amber-200',
+    success: 'bg-emerald-50 border-emerald-200',
+    accent:  'bg-orange-50 border-orange-200',
+  };
+  const valueCls: Record<MetricVariant, string> = {
+    default: 'text-foreground',
+    danger:  'text-red-700',
+    warning: 'text-amber-700',
+    success: 'text-emerald-700',
+    accent:  'text-orange-700',
+  };
+  const iconCls: Record<MetricVariant, string> = {
+    default: 'text-muted-foreground',
+    danger:  'text-red-400',
+    warning: 'text-amber-400',
+    success: 'text-emerald-400',
+    accent:  'text-orange-400',
+  };
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-3">
-        <Card>
-          <CardHeader className="pb-1 pt-3 px-3">
-            <CardTitle className="text-xs text-muted-foreground">Total Transações</CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-xl font-bold">{resultado.resumoAuditoria.totalTransacoes}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-red-200">
-          <CardHeader className="pb-1 pt-3 px-3">
-            <CardTitle className="text-xs text-red-600">Cobrado a Mais</CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-xl font-bold text-red-600">{fmt(resultado.resumoAuditoria.totalCobradoAMais)}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-yellow-200">
-          <CardHeader className="pb-1 pt-3 px-3">
-            <CardTitle className="text-xs text-yellow-600">Cobrado a Menos</CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-xl font-bold text-yellow-600">{fmt(resultado.resumoAuditoria.totalCobradoAMenos)}</p>
-          </CardContent>
-        </Card>
+    <div className={`rounded-xl border p-3 flex flex-col gap-1.5 ${wrapperCls[variant]}`}>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground leading-tight">{label}</p>
+        {Icon && <Icon className={`h-3.5 w-3.5 ${iconCls[variant]}`} />}
       </div>
-      {resultado.resumoAuditoria.porBandeira?.length > 0 && (
-        <div className="rounded-md border text-sm overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium">Bandeira</th>
-                <th className="text-right px-3 py-2 font-medium">Qtd</th>
-                <th className="text-right px-3 py-2 font-medium">Diferença Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resultado.resumoAuditoria.porBandeira.map((b) => (
-                <tr key={b.bandeira} className="border-t">
-                  <td className="px-3 py-2">{b.bandeira}</td>
-                  <td className="text-right px-3 py-2">{b.quantidade}</td>
-                  <td className="text-right px-3 py-2 font-medium text-red-600">{fmt(b.diferencaTotal)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <p className={`text-base font-bold leading-none ${valueCls[variant]}`}>{value}</p>
+    </div>
+  );
+}
+
+// ── Full inline dashboard for a single resultado ───────────────────────────────
+
+function ResultadoDashboard({
+  item,
+  enviando,
+  pulsing,
+  onEnviar,
+  onChangeConteudo,
+}: {
+  item: ResultadoItem;
+  enviando: boolean;
+  pulsing: boolean;
+  onEnviar: (item: ResultadoItem) => void;
+  onChangeConteudo: (estId: string, v: string) => void;
+}) {
+  const { resumoAuditoria, resumoRecebimento } = item.resultado;
+  const [detalhesOpen, setDetalhesOpen] = useState(false);
+
+  const hasAuditBandeiras  = (resumoAuditoria?.porBandeira?.length ?? 0) > 0;
+  const hasRecebBandeiras  = (resumoRecebimento?.porBandeira?.length ?? 0) > 0;
+
+  return (
+    <div className="space-y-4">
+
+      {/* ── KPI row 1: auditoria ── */}
+      <div className="grid grid-cols-3 gap-2">
+        <MetricCard
+          label="Transações"
+          value={(resumoAuditoria?.totalTransacoes ?? 0).toLocaleString('pt-BR')}
+          icon={ReceiptText}
+          variant="default"
+        />
+        <MetricCard
+          label="Cobrado a Mais"
+          value={fmt(resumoAuditoria?.totalCobradoAMais)}
+          icon={TrendingUp}
+          variant="danger"
+        />
+        <MetricCard
+          label="Cobrado a Menos"
+          value={fmt(resumoAuditoria?.totalCobradoAMenos)}
+          icon={TrendingDown}
+          variant="warning"
+        />
+      </div>
+
+      {/* ── KPI row 2: recebimentos ── */}
+      <div className="grid grid-cols-2 gap-2">
+        <MetricCard
+          label="Total Recebido"
+          value={fmt(resumoRecebimento?.totalRecebido)}
+          icon={Wallet}
+          variant="success"
+        />
+        <MetricCard
+          label="Total em Taxas"
+          value={fmt(resumoRecebimento?.totalDescontado)}
+          icon={BadgeDollarSign}
+          variant="accent"
+        />
+      </div>
+
+      {/* ── Bandeira breakdowns (collapsible) ── */}
+      {(hasAuditBandeiras || hasRecebBandeiras) && (
+        <div className="rounded-xl border overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setDetalhesOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium bg-muted/30 hover:bg-muted/50 transition-colors"
+          >
+            <span>Detalhes por Bandeira</span>
+            {detalhesOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+
+          {detalhesOpen && (
+            <div className="p-4 space-y-5">
+
+              {/* Auditoria por bandeira */}
+              {hasAuditBandeiras && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Auditoria de Taxas</p>
+                  <div className="rounded-lg border text-xs overflow-hidden">
+                    <table className="w-full">
+                      <thead className="bg-muted/40">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium">Bandeira</th>
+                          <th className="text-right px-3 py-2 font-medium">Qtd</th>
+                          <th className="text-right px-3 py-2 font-medium">Diferença Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resumoAuditoria.porBandeira.map((b) => (
+                          <tr key={b.bandeira} className="border-t">
+                            <td className="px-3 py-2">{b.bandeira}</td>
+                            <td className="text-right px-3 py-2 tabular-nums">{b.quantidade}</td>
+                            <td className={`text-right px-3 py-2 font-semibold tabular-nums ${
+                              b.diferencaTotal > 0 ? 'text-red-600' : b.diferencaTotal < 0 ? 'text-emerald-600' : 'text-muted-foreground'
+                            }`}>
+                              {fmt(b.diferencaTotal)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Recebimentos por bandeira */}
+              {hasRecebBandeiras && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recebimentos</p>
+                  <div className="rounded-lg border text-xs overflow-x-auto">
+                    <table className="w-full min-w-[420px]">
+                      <thead className="bg-muted/40">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium">Bandeira</th>
+                          <th className="text-right px-3 py-2 font-medium">Qtd</th>
+                          <th className="text-right px-3 py-2 font-medium">Bruto</th>
+                          <th className="text-right px-3 py-2 font-medium">Taxas</th>
+                          <th className="text-right px-3 py-2 font-medium">Líquido</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resumoRecebimento.porBandeira.map((b) => (
+                          <tr key={b.bandeira} className="border-t">
+                            <td className="px-3 py-2">{b.bandeira}</td>
+                            <td className="text-right px-3 py-2 tabular-nums">{b.quantidade}</td>
+                            <td className="text-right px-3 py-2 tabular-nums">{fmt(b.totalBruto)}</td>
+                            <td className="text-right px-3 py-2 tabular-nums text-orange-600">{fmt(b.totalTaxa)}</td>
+                            <td className="text-right px-3 py-2 tabular-nums text-emerald-600 font-semibold">{fmt(b.totalLiquido)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
-      <div className="grid grid-cols-2 gap-3">
-        <Card>
-          <CardHeader className="pb-1 pt-3 px-3">
-            <CardTitle className="text-xs text-muted-foreground">Total Recebido</CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-xl font-bold text-green-600">{fmt(resultado.resumoRecebimento.totalRecebido)}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-orange-200">
-          <CardHeader className="pb-1 pt-3 px-3">
-            <CardTitle className="text-xs text-orange-600">Total Descontado em Taxas</CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-xl font-bold text-orange-600">{fmt(resultado.resumoRecebimento.totalDescontado)}</p>
-          </CardContent>
-        </Card>
+
+      <Separator />
+
+      {/* ── Message editor ── */}
+      <div className="space-y-1.5">
+        <Label>Mensagem — revise antes de enviar</Label>
+        <MensagemEditor
+          conteudo={item.conteudo}
+          pulsing={pulsing}
+          onChange={(v) => onChangeConteudo(item.estabelecimentoId, v)}
+        />
       </div>
+
+      <Button
+        onClick={() => onEnviar(item)}
+        disabled={enviando || !item.conteudo}
+        className="w-full"
+        size="lg"
+      >
+        {enviando ? 'Enviando...' : `Enviar para ${item.descricao} via WhatsApp`}
+      </Button>
     </div>
   );
 }
@@ -310,11 +442,9 @@ function AuditoriaSummary({ resultado }: { resultado: MensagemGeradaResponse }) 
 // ─── main component ───────────────────────────────────────────────────────────
 
 export function MensagemGerarForm() {
-  // ui state
   const [resultados,      setResultados]      = useState<ResultadoItem[]>([]);
-  const [expandedResults, setExpandedResults] = useState<Set<string>>(new Set());
+  const [selectedEstId,   setSelectedEstId]   = useState<string | null>(null);
   const [previewOpen,     setPreviewOpen]     = useState(true);
-  const [auditoriaModal,  setAuditoriaModal]  = useState<ResultadoItem | null>(null);
   const [conteudoModal,   setConteudoModal]   = useState<MensagemEnviada | null>(null);
   const [step,            setStep]            = useState<1 | 2 | 3>(1);
   const [pulsingId,       setPulsingId]       = useState<string | null>(null);
@@ -324,8 +454,7 @@ export function MensagemGerarForm() {
 
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // data
-  const { data: clientes }       = useClientes();
+  const { data: clientes }        = useClientes();
   const { data: templatesAtivos } = useTemplatesAtivos();
 
   const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<MensagemGerarFormData>({
@@ -333,18 +462,18 @@ export function MensagemGerarForm() {
     defaultValues: { enviarParaTodos: false, modo: 'template', estabelecimentoIds: [] },
   });
 
-  const enviarParaTodos  = watch('enviarParaTodos');
-  const clienteId        = watch('clienteId');
-  const modo             = watch('modo');
-  const templateId       = watch('templateId');
+  const enviarParaTodos    = watch('enviarParaTodos');
+  const clienteId          = watch('clienteId');
+  const modo               = watch('modo');
+  const templateId         = watch('templateId');
   const estabelecimentoIds = watch('estabelecimentoIds') ?? [];
-  const dataInicio       = watch('dataInicio');
-  const dataFim          = watch('dataFim');
+  const dataInicio         = watch('dataInicio');
+  const dataFim            = watch('dataFim');
 
   const { data: estabelecimentos } = useEstabelecimentos(clienteId ?? '');
-  const { mutateAsync: gerar, isPending: gerando }       = useGerarMensagem();
-  const { mutate: gerarTodos,  isPending: gerandoTodos } = useGerarParaTodos();
-  const { mutate: enviar,      isPending: enviando }      = useEnviarMensagem();
+  const { mutateAsync: gerar,  isPending: gerando }       = useGerarMensagem();
+  const { mutate: gerarTodos,  isPending: gerandoTodos }  = useGerarParaTodos();
+  const { mutate: enviar,      isPending: enviando }       = useEnviarMensagem();
 
   const selectedTemplate = templatesAtivos?.find((t) => t.id === templateId);
   const ativos           = estabelecimentos?.filter((e) => e.ativo) ?? [];
@@ -354,10 +483,9 @@ export function MensagemGerarForm() {
     ? estabelecimentoIds[0] : '';
   const { data: logPage, isLoading: logLoading } = useMensagensEnviadas(singleEstId);
 
-  // Fix 3: open preview whenever a new template is selected
-  useEffect(() => { if (templateId) setPreviewOpen(true); }, [templateId]);
+  const selectedItem = resultados.find((r) => r.estabelecimentoId === selectedEstId) ?? null;
 
-  // Fix 6: reset bulk preview when mode toggled off
+  useEffect(() => { if (templateId) setPreviewOpen(true); }, [templateId]);
   useEffect(() => { if (!enviarParaTodos) setBulkPreview(false); }, [enviarParaTodos]);
 
   const isFormValid = (() => {
@@ -378,13 +506,6 @@ export function MensagemGerarForm() {
       { shouldValidate: true },
     );
   };
-
-  const toggleExpanded = (id: string) =>
-    setExpandedResults((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) { next.delete(id); } else { next.add(id); }
-      return next;
-    });
 
   const updateConteudo = (estId: string, conteudo: string) =>
     setResultados((prev) => prev.map((r) => r.estabelecimentoId === estId ? { ...r, conteudo } : r));
@@ -411,6 +532,7 @@ export function MensagemGerarForm() {
     }
 
     setResultados([]);
+    setSelectedEstId(null);
     setStep(1);
     const ests = ativos.filter((e) => data.estabelecimentoIds?.includes(e.id));
     let firstId: string | null = null;
@@ -425,8 +547,6 @@ export function MensagemGerarForm() {
           modo: data.modo,
           templateId: data.templateId,
         });
-        // templateParametros vem do /gerar e precisa ser preservado no estado —
-        // será reenviado em onEnviar para preenchimento posicional na Meta API
         setResultados((prev) => [
           ...prev,
           {
@@ -437,8 +557,10 @@ export function MensagemGerarForm() {
             templateParametros: res.templateParametros,
           },
         ]);
-        setExpandedResults((prev) => new Set(prev).add(est.id));
-        if (!firstId) firstId = est.id;
+        if (!firstId) {
+          firstId = est.id;
+          setSelectedEstId(firstId);
+        }
       } catch {
         toast.error(`Erro ao gerar mensagem para ${est.descricao}`);
       }
@@ -446,7 +568,6 @@ export function MensagemGerarForm() {
 
     if (firstId) {
       setStep(2);
-      // Fix 2: scroll + pulse
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
       setPulsingId(firstId);
       setTimeout(() => setPulsingId(null), 3000);
@@ -454,9 +575,6 @@ export function MensagemGerarForm() {
   };
 
   const onEnviar = (item: ResultadoItem) => {
-    // templateParametros é o mapa { chave → valor } armazenado em onGerar.
-    // O backend usa esse mapa para preencher os parâmetros posicionais {{1}}, {{2}}, ...
-    // no payload de template registrado enviado à Meta Cloud API.
     enviar(
       {
         clienteId: clienteId!,
@@ -471,9 +589,17 @@ export function MensagemGerarForm() {
       {
         onSuccess: () => {
           toast.success(`Mensagem enviada para ${item.descricao}!`);
-          setResultados((prev) => prev.filter((r) => r.estabelecimentoId !== item.estabelecimentoId));
-          setStep(3);
-          setTimeout(() => setStep(1), 4000);
+          setResultados((prev) => {
+            const next = prev.filter((r) => r.estabelecimentoId !== item.estabelecimentoId);
+            if (next.length === 0) {
+              setStep(3);
+              setSelectedEstId(null);
+              setTimeout(() => setStep(1), 4000);
+            } else {
+              setSelectedEstId(next[0].estabelecimentoId);
+            }
+            return next;
+          });
         },
         onError: () => toast.error('Erro ao enviar mensagem'),
       },
@@ -482,21 +608,18 @@ export function MensagemGerarForm() {
 
   const isPending = gerando || gerandoTodos;
 
-  // For Fix 5 modal enrichment
-  const modalCliente       = conteudoModal ? clientes?.find((c) => c.id === conteudoModal.clienteId) : null;
+  const modalCliente         = conteudoModal ? clientes?.find((c) => c.id === conteudoModal.clienteId) : null;
   const modalEstabelecimento = conteudoModal ? ativos.find((e) => e.id === conteudoModal.estabelecimentoId) : null;
 
   // ── render ──
 
   return (
     <>
-      {/* Fix 2: step indicator (hidden in bulk mode) */}
       {!enviarParaTodos && <StepIndicator step={step} />}
 
-      {/* Fix 1: permanently two-column on desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-[480px_1fr] gap-8 items-start">
 
-        {/* ── LEFT: form + results ── */}
+        {/* ── LEFT: form + establishment selector ── */}
         <div className="space-y-6">
           <form onSubmit={handleSubmit(onGerar)} className="space-y-4">
 
@@ -513,6 +636,7 @@ export function MensagemGerarForm() {
                     onChange={(e) => {
                       field.onChange(e.target.checked);
                       setResultados([]);
+                      setSelectedEstId(null);
                       setStep(1);
                       setValue('estabelecimentoIds', []);
                       setValue('clienteId', undefined);
@@ -526,7 +650,6 @@ export function MensagemGerarForm() {
               </div>
             </label>
 
-            {/* Fix 6: amber warning banner */}
             {enviarParaTodos && (
               <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-amber-50 border border-amber-300 text-sm text-amber-800">
                 <Users className="h-4 w-4 flex-shrink-0 mt-0.5" />
@@ -537,7 +660,6 @@ export function MensagemGerarForm() {
               </div>
             )}
 
-            {/* cliente + estabelecimentos — single mode only */}
             {!enviarParaTodos && (
               <>
                 <div className="space-y-1">
@@ -551,6 +673,7 @@ export function MensagemGerarForm() {
                           field.onChange(val);
                           setValue('estabelecimentoIds', []);
                           setResultados([]);
+                          setSelectedEstId(null);
                           setStep(1);
                         }}
                         value={field.value ?? ''}
@@ -621,7 +744,7 @@ export function MensagemGerarForm() {
               )} />
             </div>
 
-            {/* Fix 3: template selector with chip preview */}
+            {/* template selector */}
             {modo === 'template' && (
               <div className="space-y-2">
                 <div className="space-y-1">
@@ -679,7 +802,7 @@ export function MensagemGerarForm() {
               </div>
             )}
 
-            {/* Fix 6: two-step bulk or standard gerar */}
+            {/* bulk two-step or standard gerar */}
             {enviarParaTodos ? (
               <div className="space-y-3">
                 {!bulkPreview ? (
@@ -761,87 +884,96 @@ export function MensagemGerarForm() {
             )}
           </form>
 
-          {/* token override field — appears once there are results to send */}
+          {/* ── Establishment selector (shown once results exist) ── */}
           {resultados.length > 0 && (
-            <div className="rounded-md border bg-muted/10 p-3 space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <KeyRound className="h-4 w-4" />
-                <span>Access Token Meta</span>
-                <span className="text-xs font-normal">(opcional — usa o configurado no servidor se vazio)</span>
-              </div>
-              <div className="relative">
-                <Input
-                  type={tokenVisible ? 'text' : 'password'}
-                  value={metaToken}
-                  onChange={(e) => setMetaToken(e.target.value)}
-                  placeholder="Cole aqui o token se quiser sobrescrever o padrão"
-                  className="pr-20 font-mono text-xs"
-                />
-                <button
-                  type="button"
-                  onClick={() => setTokenVisible((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  {tokenVisible ? 'Ocultar' : 'Mostrar'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* results */}
-          {resultados.length > 0 && (
-            <div ref={resultsRef} className="space-y-4 scroll-mt-4">
+            <div ref={resultsRef} className="space-y-2 scroll-mt-4">
               <Separator />
-              {resultados.map((item) => (
-                <div key={item.estabelecimentoId} className="rounded-lg border overflow-hidden">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {resultados.length} resultado{resultados.length !== 1 ? 's' : ''} gerado{resultados.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+
+              {/* token override */}
+              <div className="rounded-md border bg-muted/10 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <KeyRound className="h-4 w-4" />
+                  <span>Access Token Meta</span>
+                  <span className="text-xs font-normal">(opcional)</span>
+                </div>
+                <div className="relative">
+                  <Input
+                    type={tokenVisible ? 'text' : 'password'}
+                    value={metaToken}
+                    onChange={(e) => setMetaToken(e.target.value)}
+                    placeholder="Usa o token configurado no servidor se vazio"
+                    className="pr-20 font-mono text-xs"
+                  />
                   <button
                     type="button"
-                    onClick={() => toggleExpanded(item.estabelecimentoId)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-muted/20 hover:bg-muted/40 transition-colors font-medium text-sm"
+                    onClick={() => setTokenVisible((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
                   >
-                    <span>{item.descricao}</span>
-                    {expandedResults.has(item.estabelecimentoId)
-                      ? <ChevronUp className="h-4 w-4" />
-                      : <ChevronDown className="h-4 w-4" />}
+                    {tokenVisible ? 'Ocultar' : 'Mostrar'}
                   </button>
-
-                  {expandedResults.has(item.estabelecimentoId) && (
-                    <div className="p-4 space-y-3">
-                      <Label>Mensagem Gerada — revise antes de enviar</Label>
-                      {/* Fix 4: editor with pencil, copy, char count */}
-                      <MensagemEditor
-                        conteudo={item.conteudo}
-                        pulsing={pulsingId === item.estabelecimentoId}
-                        onChange={(v) => updateConteudo(item.estabelecimentoId, v)}
-                      />
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <Button onClick={() => onEnviar(item)} disabled={enviando || !item.conteudo}>
-                          {enviando ? 'Enviando...' : 'Enviar via WhatsApp'}
-                        </Button>
-                        <button
-                          type="button"
-                          onClick={() => setAuditoriaModal(item)}
-                          className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
-                        >
-                          <Eye className="h-3 w-3" /> Ver dados detalhados
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
-              ))}
+              </div>
+
+              <div className="space-y-1">
+                {resultados.map((item) => {
+                  const selected = selectedEstId === item.estabelecimentoId;
+                  return (
+                    <button
+                      key={item.estabelecimentoId}
+                      type="button"
+                      onClick={() => setSelectedEstId(item.estabelecimentoId)}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-all ${
+                        selected
+                          ? 'border-blue-500 bg-blue-50 text-blue-800 font-medium shadow-sm'
+                          : 'border-border hover:bg-muted/40 text-foreground'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate">{item.descricao}</span>
+                        {selected && (
+                          <span className="text-xs text-blue-500 flex-shrink-0">visualizando →</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
 
-        {/* ── RIGHT: log panel — always rendered (Fix 1) ── */}
-        <div className="space-y-3">
-          {singleEstId ? (
+        {/* ── RIGHT: dashboard when results exist, log panel otherwise ── */}
+        <div className="space-y-3 sticky top-4">
+
+          {resultados.length > 0 ? (
+            <>
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                Dashboard — {selectedItem?.descricao ?? 'Selecione um estabelecimento'}
+              </h3>
+              {selectedItem ? (
+                <ResultadoDashboard
+                  item={selectedItem}
+                  enviando={enviando}
+                  pulsing={pulsingId === selectedItem.estabelecimentoId}
+                  onEnviar={onEnviar}
+                  onChangeConteudo={updateConteudo}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground py-4">
+                  Selecione um estabelecimento à esquerda para ver o dashboard.
+                </p>
+              )}
+            </>
+          ) : singleEstId ? (
             <>
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
                 Mensagens Enviadas — {ativos.find((e) => e.id === singleEstId)?.descricao}
               </h3>
-
               {logLoading ? (
                 <div className="space-y-2">
                   {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
@@ -863,7 +995,6 @@ export function MensagemGerarForm() {
                       </tr>
                     </thead>
                     <tbody>
-                      {/* Fix 5: entire row clickable with hover highlight */}
                       {logPage.content.map((m) => (
                         <tr
                           key={m.id}
@@ -904,7 +1035,6 @@ export function MensagemGerarForm() {
               )}
             </>
           ) : (
-            /* Fix 1: persistent empty state — no layout shift */
             <div className="flex flex-col items-center justify-center gap-3 min-h-[200px] h-full rounded-lg border border-dashed text-muted-foreground">
               <Clock className="h-8 w-8 opacity-30" />
               <p className="text-sm text-center max-w-[200px] leading-snug">
@@ -915,7 +1045,7 @@ export function MensagemGerarForm() {
         </div>
       </div>
 
-      {/* Fix 5: message content modal */}
+      {/* message content modal */}
       <Dialog open={!!conteudoModal} onOpenChange={(open) => { if (!open) setConteudoModal(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -936,16 +1066,6 @@ export function MensagemGerarForm() {
               </pre>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* audit data modal */}
-      <Dialog open={!!auditoriaModal} onOpenChange={(open) => { if (!open) setAuditoriaModal(null); }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Dados Detalhados — {auditoriaModal?.descricao}</DialogTitle>
-          </DialogHeader>
-          {auditoriaModal && <AuditoriaSummary resultado={auditoriaModal.resultado} />}
         </DialogContent>
       </Dialog>
     </>

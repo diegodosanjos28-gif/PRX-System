@@ -6,6 +6,8 @@ export interface Cliente {
   whatsapp: string;
   ativo: boolean;
   observacoes?: string;
+  conciflexLogin?: string;
+  conciflexSenha?: string;
   criadoEm: string;
 }
 
