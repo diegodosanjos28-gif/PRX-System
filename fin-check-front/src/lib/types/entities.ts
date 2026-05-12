@@ -166,3 +166,63 @@ export interface LogColeta {
   registrosColetados: number;
   mensagemErro?: string;
 }
+
+// ── Experiência do Cliente ──────────────────────────────────────────────────
+
+export interface VariacaoMetrica {
+  label: string;
+  valorPeriodoPrincipal: number;
+  valorPeriodoComparacao: number;
+  variacaoPercentual: number;
+  direcao: 'ALTA' | 'QUEDA' | 'ESTAVEL';
+}
+
+export interface VariacaoPorGrupo {
+  grupo: string;
+  metrica: string;
+  valorPrincipal: number;
+  valorComparacao: number;
+  variacaoPercentual: number;
+  direcao: 'ALTA' | 'QUEDA' | 'ESTAVEL';
+}
+
+export interface InsightsComparativos {
+  recebimentos_valorBruto: VariacaoMetrica;
+  recebimentos_totalTaxas: VariacaoMetrica;
+  recebimentos_valorLiquido: VariacaoMetrica;
+  recebimentos_tarifaTransacao: VariacaoMetrica;
+  recebimentos_quantidadeTransacoes: VariacaoMetrica;
+  recebimentos_porBandeira: VariacaoPorGrupo[];
+  recebimentos_porDescAjuste: VariacaoPorGrupo[];
+  conciliacao_valorBruto: VariacaoMetrica;
+  conciliacao_totalTaxaNaoContratada: VariacaoMetrica;
+  conciliacao_percentualTaxaMedio: VariacaoMetrica;
+  conciliacao_quantidadeTransacoes: VariacaoMetrica;
+  conciliacao_porBandeira: VariacaoPorGrupo[];
+  conciliacao_porAdquirente: VariacaoPorGrupo[];
+}
+
+export interface GrupoDescAjuste {
+  descAjuste: string;
+  quantidadeTransacoes: number;
+  valorBrutoTotal: number;
+  totalTaxas: number;
+  valorLiquidoTotal: number;
+  tarifaTransacaoTotal: number;
+}
+
+export interface ExperienciaClienteData {
+  estabelecimentoId: string;
+  descricaoEstabelecimento: string;
+  dataInicio: string;
+  dataFim: string;
+  dataInicioComparacao: string;
+  dataFimComparacao: string;
+  gruposRecebimento: GrupoDescAjuste[];
+  totalGeralBruto: number;
+  totalGeralTaxas: number;
+  totalGeralLiquido: number;
+  totalGeralTarifaTransacao: number;
+  totalGeralTransacoes: number;
+  insights: InsightsComparativos;
+}

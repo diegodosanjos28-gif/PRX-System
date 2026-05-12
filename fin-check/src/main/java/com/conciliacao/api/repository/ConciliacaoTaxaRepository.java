@@ -74,4 +74,53 @@ public interface ConciliacaoTaxaRepository extends JpaRepository<ConciliacaoTaxa
         @Param("fim") LocalDate fim
     );
 
+    @Query("""
+        SELECT COUNT(c.id),
+            COALESCE(SUM(c.valorBruto), 0),
+            COALESCE(SUM(c.totalTaxaNaoContratadaRs), 0),
+            COALESCE(AVG(c.percentualTaxa), 0)
+        FROM ConciliacaoTaxa c
+        WHERE c.estabelecimento.id = :estabelecimentoId
+          AND c.dataVenda BETWEEN :dataInicio AND :dataFim
+        """)
+    Object[] findTotalizadoresPorPeriodo(
+        @Param("estabelecimentoId") UUID estabelecimentoId,
+        @Param("dataInicio") LocalDate dataInicio,
+        @Param("dataFim") LocalDate dataFim
+    );
+
+    @Query("""
+        SELECT c.bandeira,
+            COUNT(c.id),
+            COALESCE(SUM(c.valorBruto), 0),
+            COALESCE(SUM(c.totalTaxaNaoContratadaRs), 0),
+            COALESCE(AVG(c.percentualTaxa), 0)
+        FROM ConciliacaoTaxa c
+        WHERE c.estabelecimento.id = :estabelecimentoId
+          AND c.dataVenda BETWEEN :dataInicio AND :dataFim
+        GROUP BY c.bandeira
+        """)
+    List<Object[]> findAgrupadosPorBandeiraComparacao(
+        @Param("estabelecimentoId") UUID estabelecimentoId,
+        @Param("dataInicio") LocalDate dataInicio,
+        @Param("dataFim") LocalDate dataFim
+    );
+
+    @Query("""
+        SELECT c.adquirente,
+            COUNT(c.id),
+            COALESCE(SUM(c.valorBruto), 0),
+            COALESCE(SUM(c.totalTaxaNaoContratadaRs), 0),
+            COALESCE(AVG(c.percentualTaxa), 0)
+        FROM ConciliacaoTaxa c
+        WHERE c.estabelecimento.id = :estabelecimentoId
+          AND c.dataVenda BETWEEN :dataInicio AND :dataFim
+        GROUP BY c.adquirente
+        """)
+    List<Object[]> findAgrupadosPorAdquirente(
+        @Param("estabelecimentoId") UUID estabelecimentoId,
+        @Param("dataInicio") LocalDate dataInicio,
+        @Param("dataFim") LocalDate dataFim
+    );
+
 }

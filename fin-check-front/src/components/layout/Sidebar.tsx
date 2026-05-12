@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, MessageSquare, FileText, DollarSign, BarChart2, LogOut, RefreshCw, LayoutTemplate } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, FileText, DollarSign, BarChart2, LogOut, RefreshCw, LayoutTemplate, LineChart } from 'lucide-react';
 import Image from 'next/image';
 import logoDark from '@/assets/logo-dark.jpeg';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -13,6 +13,7 @@ const links = [
   { href: '/clientes',     label: 'Clientes',             icon: Users           },
   { href: '/recebimentos', label: 'Recebimentos',         icon: DollarSign      },
   { href: '/conciliacao',  label: 'Conciliação de Taxas', icon: BarChart2       },
+  { href: '/experiencia-cliente', label: 'Experiência do Cliente', icon: LineChart },
   { href: '/mensagens',    label: 'Mensagens',            icon: MessageSquare   },
   { href: '/templates',    label: 'Templates',            icon: LayoutTemplate  },
   { href: '/coleta',       label: 'Coleta Manual',        icon: RefreshCw       },
