@@ -262,7 +262,9 @@ public class MensagemService {
         Template template = templateService.buscarEntidade(req.templateId());
         log.info("Gerando mensagem via template: templateId={}, nome={}", template.getId(), template.getNome());
 
-        String nome = cliente.getNomeFantasia() != null ? cliente.getNomeFantasia() : cliente.getRazaoSocial();
+        String nomeFantasia = cliente.getNomeFantasia();
+        String razaoSocial = cliente.getRazaoSocial();
+
         List<RecebimentoResponse> recs = recebimentos.recebimentos();
 
         // ── totalizadores por modalidade (computed in-memory from fetched recebimentos) ──
@@ -300,7 +302,7 @@ public class MensagemService {
         // Esses valores serão repassados à Meta API como parâmetros posicionais {{1}}, {{2}}, etc.
         Map<String, String> valores = new LinkedHashMap<>();
         // ── variáveis originais ────────────────────────────────────────────
-        valores.put("nomeFantasia",    nome);
+        valores.put("nomeFantasia",    nomeFantasia);
         valores.put("dataInicio",      req.dataInicio().format(FMT));
         valores.put("dataFim",         req.dataFim().format(FMT));
         valores.put("estabelecimento", est.getDescricao());
@@ -310,7 +312,7 @@ public class MensagemService {
         valores.put("totalRecebido",   formatarValor(recebimentos.totalRecebido()));
         valores.put("totalDescontado", formatarValor(recebimentos.totalDescontado()));
         // ── novas variáveis ────────────────────────────────────────────────
-        valores.put("cliente",               nome);
+        valores.put("cliente",               razaoSocial);
         valores.put("telefone",              cliente.getWhatsapp());
         valores.put("data",                  req.dataFim().format(FMT));
         valores.put("templateName",          template.getNome());

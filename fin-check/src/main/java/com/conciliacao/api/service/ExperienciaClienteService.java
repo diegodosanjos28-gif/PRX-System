@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -24,6 +25,15 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ExperienciaClienteService {
+
+    // Totalizadores de recebimentos: [count, valorBruto, valorTaxa, valorLiquido, tarifaTransacao]
+    private static final int REC_TOT_COLS = 5;
+    // Totalizadores de conciliação: [count, valorBruto, taxaNaoContratada, pctTaxa]
+    private static final int CONC_TOT_COLS = 4;
+    // Agrupamentos de recebimento: [grupo, count, valorBruto, valorTaxa, valorLiquido, tarifaTransacao]
+    private static final int REC_GRP_COLS = 6;
+    // Agrupamentos de conciliação: [grupo, count, valorBruto, taxaNaoContratada, pctTaxa]
+    private static final int CONC_GRP_COLS = 5;
 
     private final RecebimentoRepository recebimentoRepository;
     private final ConciliacaoTaxaRepository conciliacaoTaxaRepository;
@@ -38,34 +48,50 @@ public class ExperienciaClienteService {
         Estabelecimento est = estabelecimentoService.buscarEntidade(estabelecimentoId);
 
         // ── Recebimentos ─────────────────────────────────────────────────────────
-        List<Object[]> descAjusteP = recebimentoRepository
-                .findAgrupadosPorDescAjuste(estabelecimentoId, dataInicio, dataFim);
-        List<Object[]> descAjusteC = recebimentoRepository
-                .findAgrupadosPorDescAjuste(estabelecimentoId, dataInicioComp, dataFimComp);
-        List<Object[]> bandeiraRecP = recebimentoRepository
-                .findAgrupadosPorBandeiraVenda(estabelecimentoId, dataInicio, dataFim);
-        List<Object[]> bandeiraRecC = recebimentoRepository
-                .findAgrupadosPorBandeiraVenda(estabelecimentoId, dataInicioComp, dataFimComp);
-        Object[] totRecP = recebimentoRepository
-                .findTotalizadoresPorPeriodo(estabelecimentoId, dataInicio, dataFim);
-        Object[] totRecC = recebimentoRepository
-                .findTotalizadoresPorPeriodo(estabelecimentoId, dataInicioComp, dataFimComp);
+        List<Object[]> descAjusteP = validarLinhas(
+                recebimentoRepository.findAgrupadosPorDescAjuste(estabelecimentoId, dataInicio, dataFim),
+                REC_GRP_COLS, "findAgrupadosPorDescAjuste[principal]");
+        List<Object[]> descAjusteC = validarLinhas(
+                recebimentoRepository.findAgrupadosPorDescAjuste(estabelecimentoId, dataInicioComp, dataFimComp),
+                REC_GRP_COLS, "findAgrupadosPorDescAjuste[comparacao]");
+
+        List<Object[]> bandeiraRecP = validarLinhas(
+                recebimentoRepository.findAgrupadosPorBandeiraVenda(estabelecimentoId, dataInicio, dataFim),
+                REC_GRP_COLS, "findAgrupadosPorBandeiraVenda[principal]");
+        List<Object[]> bandeiraRecC = validarLinhas(
+                recebimentoRepository.findAgrupadosPorBandeiraVenda(estabelecimentoId, dataInicioComp, dataFimComp),
+                REC_GRP_COLS, "findAgrupadosPorBandeiraVenda[comparacao]");
+
+        Object[] totRecP = primeiraLinha(
+                recebimentoRepository.findTotalizadoresPorPeriodo(estabelecimentoId, dataInicio, dataFim),
+                REC_TOT_COLS);
+        Object[] totRecC = primeiraLinha(
+                recebimentoRepository.findTotalizadoresPorPeriodo(estabelecimentoId, dataInicioComp, dataFimComp),
+                REC_TOT_COLS);
 
         // ── Conciliação de Taxas ──────────────────────────────────────────────────
-        Object[] totConcP = conciliacaoTaxaRepository
-                .findTotalizadoresPorPeriodo(estabelecimentoId, dataInicio, dataFim);
-        Object[] totConcC = conciliacaoTaxaRepository
-                .findTotalizadoresPorPeriodo(estabelecimentoId, dataInicioComp, dataFimComp);
-        List<Object[]> bandeiraConcP = conciliacaoTaxaRepository
-                .findAgrupadosPorBandeiraComparacao(estabelecimentoId, dataInicio, dataFim);
-        List<Object[]> bandeiraConcC = conciliacaoTaxaRepository
-                .findAgrupadosPorBandeiraComparacao(estabelecimentoId, dataInicioComp, dataFimComp);
-        List<Object[]> adqP = conciliacaoTaxaRepository
-                .findAgrupadosPorAdquirente(estabelecimentoId, dataInicio, dataFim);
-        List<Object[]> adqC = conciliacaoTaxaRepository
-                .findAgrupadosPorAdquirente(estabelecimentoId, dataInicioComp, dataFimComp);
+        Object[] totConcP = primeiraLinha(
+                conciliacaoTaxaRepository.findTotalizadoresPorPeriodo(estabelecimentoId, dataInicio, dataFim),
+                CONC_TOT_COLS);
+        Object[] totConcC = primeiraLinha(
+                conciliacaoTaxaRepository.findTotalizadoresPorPeriodo(estabelecimentoId, dataInicioComp, dataFimComp),
+                CONC_TOT_COLS);
 
-        // ── Build GrupoDescAjuste list (período principal) ────────────────────────
+        List<Object[]> bandeiraConcP = validarLinhas(
+                conciliacaoTaxaRepository.findAgrupadosPorBandeiraComparacao(estabelecimentoId, dataInicio, dataFim),
+                CONC_GRP_COLS, "findAgrupadosPorBandeiraComparacao[principal]");
+        List<Object[]> bandeiraConcC = validarLinhas(
+                conciliacaoTaxaRepository.findAgrupadosPorBandeiraComparacao(estabelecimentoId, dataInicioComp, dataFimComp),
+                CONC_GRP_COLS, "findAgrupadosPorBandeiraComparacao[comparacao]");
+
+        List<Object[]> adqP = validarLinhas(
+                conciliacaoTaxaRepository.findAgrupadosPorAdquirente(estabelecimentoId, dataInicio, dataFim),
+                CONC_GRP_COLS, "findAgrupadosPorAdquirente[principal]");
+        List<Object[]> adqC = validarLinhas(
+                conciliacaoTaxaRepository.findAgrupadosPorAdquirente(estabelecimentoId, dataInicioComp, dataFimComp),
+                CONC_GRP_COLS, "findAgrupadosPorAdquirente[comparacao]");
+
+        // ── GrupoDescAjuste (período principal) ───────────────────────────────────
         List<GrupoDescAjuste> grupos = descAjusteP.stream()
                 .map(row -> new GrupoDescAjuste(
                         (String) row[0],
@@ -77,40 +103,33 @@ public class ExperienciaClienteService {
                 ))
                 .toList();
 
-        BigDecimal totalGeralBruto = grupos.stream()
-                .map(GrupoDescAjuste::valorBrutoTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalGeralTaxas = grupos.stream()
-                .map(GrupoDescAjuste::totalTaxas).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalGeralLiquido = grupos.stream()
-                .map(GrupoDescAjuste::valorLiquidoTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalGeralTarifa = grupos.stream()
-                .map(GrupoDescAjuste::tarifaTransacaoTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-        Long totalGeralTransacoes = grupos.stream()
-                .mapToLong(GrupoDescAjuste::quantidadeTransacoes).sum();
+        BigDecimal totalGeralBruto      = grupos.stream().map(GrupoDescAjuste::valorBrutoTotal)     .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalGeralTaxas      = grupos.stream().map(GrupoDescAjuste::totalTaxas)          .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalGeralLiquido    = grupos.stream().map(GrupoDescAjuste::valorLiquidoTotal)    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalGeralTarifa     = grupos.stream().map(GrupoDescAjuste::tarifaTransacaoTotal) .reduce(BigDecimal.ZERO, BigDecimal::add);
+        long       totalGeralTransacoes = grupos.stream().mapToLong(GrupoDescAjuste::quantidadeTransacoes).sum();
 
-        // ── Build InsightsComparativos ─────────────────────────────────────────────
+        // ── InsightsComparativos ──────────────────────────────────────────────────
+        // totRecP: [0]=count, [1]=valorBruto, [2]=valorTaxa, [3]=valorLiquido, [4]=tarifaTransacao
+        // totConcP: [0]=count, [1]=valorBruto, [2]=taxaNaoContratada, [3]=pctTaxa
         InsightsComparativos insights = new InsightsComparativos(
-                // Recebimentos — visão geral
-                calcularVariacao("Valor Bruto", toBD(totRecP[1]), toBD(totRecC[1])),
-                calcularVariacao("Total em Taxas", toBD(totRecP[2]), toBD(totRecC[2])),
-                calcularVariacao("Valor Líquido", toBD(totRecP[3]), toBD(totRecC[3])),
-                calcularVariacao("Tarifa por Transação", toBD(totRecP[4]), toBD(totRecC[4])),
+                calcularVariacao("Valor Bruto",             toBD(totRecP[1]),  toBD(totRecC[1])),
+                calcularVariacao("Total em Taxas",          toBD(totRecP[2]),  toBD(totRecC[2])),
+                calcularVariacao("Valor Líquido",           toBD(totRecP[3]),  toBD(totRecC[3])),
+                calcularVariacao("Tarifa por Transação",    toBD(totRecP[4]),  toBD(totRecC[4])),
                 calcularVariacao("Quantidade de Transações",
                         BigDecimal.valueOf(toLong(totRecP[0])),
                         BigDecimal.valueOf(toLong(totRecC[0]))),
-                // Recebimentos — por bandeira e por desc_ajuste
                 buildVariacoes6(bandeiraRecP, bandeiraRecC),
-                buildVariacoes6(descAjusteP, descAjusteC),
-                // Conciliação — visão geral
-                calcularVariacao("Valor Bruto", toBD(totConcP[1]), toBD(totConcC[1])),
-                calcularVariacao("Taxa Não Contratada", toBD(totConcP[2]), toBD(totConcC[2])),
-                calcularVariacao("% Taxa Médio", toBD(totConcP[3]), toBD(totConcC[3])),
+                buildVariacoes6(descAjusteP,  descAjusteC),
+                calcularVariacao("Valor Bruto",             toBD(totConcP[1]), toBD(totConcC[1])),
+                calcularVariacao("Taxa Não Contratada",     toBD(totConcP[2]), toBD(totConcC[2])),
+                calcularVariacao("% Taxa Médio",            toBD(totConcP[3]), toBD(totConcC[3])),
                 calcularVariacao("Quantidade de Transações",
                         BigDecimal.valueOf(toLong(totConcP[0])),
                         BigDecimal.valueOf(toLong(totConcC[0]))),
-                // Conciliação — por bandeira e adquirente
                 buildVariacoes5(bandeiraConcP, bandeiraConcC),
-                buildVariacoes5(adqP, adqC)
+                buildVariacoes5(adqP,          adqC)
         );
 
         return new ExperienciaClienteResponse(
@@ -130,55 +149,61 @@ public class ExperienciaClienteService {
         );
     }
 
-    // Recebimento queries: [0]=grupo, [1]=count, [2]=valorBruto, [3]=valorTaxa, [4]=valorLiquido, [5]=tarifaTransacao
+    // ── Row builders ─────────────────────────────────────────────────────────────
+
+    // [0]=grupo,[1]=count,[2]=valorBruto,[3]=valorTaxa,[4]=valorLiquido,[5]=tarifaTransacao
     private List<VariacaoPorGrupo> buildVariacoes6(List<Object[]> principal, List<Object[]> comparacao) {
         Map<String, Object[]> compMap = comparacao.stream()
-                .collect(Collectors.toMap(r -> (String) r[0], r -> r, (a, b) -> a));
+                .filter(r -> r.length >= REC_GRP_COLS)
+                .collect(Collectors.toMap(r -> grupoKey(r[0]), r -> r, (a, b) -> a));
 
         List<VariacaoPorGrupo> result = new ArrayList<>();
         for (Object[] row : principal) {
-            String grupo = (String) row[0];
-            Object[] comp = compMap.getOrDefault(grupo,
-                    new Object[]{grupo, 0L, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO});
-            result.add(buildVPG(grupo, "valorBruto",       toBD(row[2]), toBD(comp[2])));
-            result.add(buildVPG(grupo, "totalTaxas",       toBD(row[3]), toBD(comp[3])));
-            result.add(buildVPG(grupo, "tarifaTransacao",  toBD(row[5]), toBD(comp[5])));
-            result.add(buildVPG(grupo, "valorLiquido",     toBD(row[4]), toBD(comp[4])));
+            if (row.length < REC_GRP_COLS) continue;
+            String grupo = grupoKey(row[0]);
+            Object[] comp = compMap.getOrDefault(grupo, emptyRow(REC_GRP_COLS));
+            result.add(buildVPG(grupo, "valorBruto",      toBD(row[2]), toBD(comp[2])));
+            result.add(buildVPG(grupo, "totalTaxas",      toBD(row[3]), toBD(comp[3])));
+            result.add(buildVPG(grupo, "tarifaTransacao", toBD(row[5]), toBD(comp[5])));
+            result.add(buildVPG(grupo, "valorLiquido",    toBD(row[4]), toBD(comp[4])));
         }
         return result;
     }
 
-    // ConciliacaoTaxa queries: [0]=grupo, [1]=count, [2]=valorBruto, [3]=taxaNaoContratada, [4]=pctTaxa
+    // [0]=grupo,[1]=count,[2]=valorBruto,[3]=taxaNaoContratada,[4]=pctTaxa
     private List<VariacaoPorGrupo> buildVariacoes5(List<Object[]> principal, List<Object[]> comparacao) {
         Map<String, Object[]> compMap = comparacao.stream()
-                .collect(Collectors.toMap(r -> (String) r[0], r -> r, (a, b) -> a));
+                .filter(r -> r.length >= CONC_GRP_COLS)
+                .collect(Collectors.toMap(r -> grupoKey(r[0]), r -> r, (a, b) -> a));
 
         List<VariacaoPorGrupo> result = new ArrayList<>();
         for (Object[] row : principal) {
-            String grupo = (String) row[0];
-            Object[] comp = compMap.getOrDefault(grupo,
-                    new Object[]{grupo, 0L, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO});
+            if (row.length < CONC_GRP_COLS) continue;
+            String grupo = grupoKey(row[0]);
+            Object[] comp = compMap.getOrDefault(grupo, emptyRow(CONC_GRP_COLS));
             result.add(buildVPG(grupo, "valorBruto",             toBD(row[2]), toBD(comp[2])));
             result.add(buildVPG(grupo, "totalTaxaNaoContratada", toBD(row[3]), toBD(comp[3])));
         }
         return result;
     }
 
+    // ── Variation calculations ────────────────────────────────────────────────────
+
     private VariacaoMetrica calcularVariacao(String label, BigDecimal principal, BigDecimal comparacao) {
-        principal = coalesce(principal);
-        comparacao = coalesce(comparacao);
-        BigDecimal pct = calcularPercentual(principal, comparacao);
+        principal  = nvl(principal);
+        comparacao = nvl(comparacao);
+        BigDecimal pct = percentual(principal, comparacao);
         return new VariacaoMetrica(label, principal, comparacao, pct, direcao(pct));
     }
 
     private VariacaoPorGrupo buildVPG(String grupo, String metrica, BigDecimal principal, BigDecimal comparacao) {
-        principal = coalesce(principal);
-        comparacao = coalesce(comparacao);
-        BigDecimal pct = calcularPercentual(principal, comparacao);
+        principal  = nvl(principal);
+        comparacao = nvl(comparacao);
+        BigDecimal pct = percentual(principal, comparacao);
         return new VariacaoPorGrupo(grupo, metrica, principal, comparacao, pct, direcao(pct));
     }
 
-    private BigDecimal calcularPercentual(BigDecimal principal, BigDecimal comparacao) {
+    private BigDecimal percentual(BigDecimal principal, BigDecimal comparacao) {
         if (comparacao.compareTo(BigDecimal.ZERO) == 0) {
             return principal.compareTo(BigDecimal.ZERO) > 0
                     ? new BigDecimal("100.00")
@@ -195,24 +220,63 @@ public class ExperienciaClienteService {
         return cmp > 0 ? "ALTA" : cmp < 0 ? "QUEDA" : "ESTAVEL";
     }
 
-    private BigDecimal coalesce(BigDecimal value) {
+    // ── Safe data access ──────────────────────────────────────────────────────────
+
+    /**
+     * Returns the first row from a List<Object[]> aggregate query result.
+     * Falls back to a zeroed array when the result is empty or the row is too short.
+     */
+    private Object[] primeiraLinha(List<Object[]> rows, int expectedCols) {
+        if (rows == null || rows.isEmpty()) return emptyRow(expectedCols);
+        Object[] row = rows.get(0);
+        if (row == null || row.length < expectedCols) return emptyRow(expectedCols);
+        return row;
+    }
+
+    /**
+     * Validates that every row in the list has at least expectedCols columns.
+     * Filters out malformed rows silently.
+     */
+    private List<Object[]> validarLinhas(List<Object[]> rows, int expectedCols, String queryName) {
+        if (rows == null) return List.of();
+        return rows.stream()
+                .filter(row -> row != null && row.length >= expectedCols)
+                .toList();
+    }
+
+    private Object[] emptyRow(int cols) {
+        Object[] row = new Object[cols];
+        row[0] = 0L;
+        Arrays.fill(row, 1, cols, BigDecimal.ZERO);
+        return row;
+    }
+
+    private String grupoKey(Object obj) {
+        return obj != null ? obj.toString() : "";
+    }
+
+    // ── Type converters ───────────────────────────────────────────────────────────
+
+    private BigDecimal nvl(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
     }
 
     private BigDecimal toBD(Object obj) {
         if (obj == null) return BigDecimal.ZERO;
         if (obj instanceof BigDecimal bd) return bd;
-        if (obj instanceof Double d) return BigDecimal.valueOf(d);
-        if (obj instanceof Long l) return BigDecimal.valueOf(l);
-        if (obj instanceof Integer i) return BigDecimal.valueOf(i);
-        return new BigDecimal(obj.toString());
+        if (obj instanceof Double d)     return BigDecimal.valueOf(d);
+        if (obj instanceof Long l)       return BigDecimal.valueOf(l);
+        if (obj instanceof Integer i)    return BigDecimal.valueOf(i);
+        try { return new BigDecimal(obj.toString()); }
+        catch (NumberFormatException e) { return BigDecimal.ZERO; }
     }
 
     private Long toLong(Object obj) {
         if (obj == null) return 0L;
-        if (obj instanceof Long l) return l;
-        if (obj instanceof Integer i) return i.longValue();
+        if (obj instanceof Long l)       return l;
+        if (obj instanceof Integer i)    return i.longValue();
         if (obj instanceof BigDecimal bd) return bd.longValue();
-        return Long.parseLong(obj.toString());
+        try { return Long.parseLong(obj.toString()); }
+        catch (NumberFormatException e)  { return 0L; }
     }
 }

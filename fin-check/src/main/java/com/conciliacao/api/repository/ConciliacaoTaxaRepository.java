@@ -83,7 +83,7 @@ public interface ConciliacaoTaxaRepository extends JpaRepository<ConciliacaoTaxa
         WHERE c.estabelecimento.id = :estabelecimentoId
           AND c.dataVenda BETWEEN :dataInicio AND :dataFim
         """)
-    Object[] findTotalizadoresPorPeriodo(
+    List<Object[]> findTotalizadoresPorPeriodo(
         @Param("estabelecimentoId") UUID estabelecimentoId,
         @Param("dataInicio") LocalDate dataInicio,
         @Param("dataFim") LocalDate dataFim
