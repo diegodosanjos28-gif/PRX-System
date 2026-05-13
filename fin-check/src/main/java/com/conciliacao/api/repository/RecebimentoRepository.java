@@ -106,7 +106,7 @@ public interface RecebimentoRepository extends JpaRepository<Recebimento, UUID> 
         WHERE r.estabelecimento.id = :estabelecimentoId
           AND r.dataVenda BETWEEN :dataInicio AND :dataFim
         """)
-    Object[] findTotalizadoresPorPeriodo(
+    List<Object[]> findTotalizadoresPorPeriodo(
         @Param("estabelecimentoId") UUID estabelecimentoId,
         @Param("dataInicio") LocalDate dataInicio,
         @Param("dataFim") LocalDate dataFim
