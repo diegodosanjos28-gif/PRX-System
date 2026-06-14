@@ -167,6 +167,45 @@ export interface LogColeta {
   mensagemErro?: string;
 }
 
+// ── Implantações (Derby) ──────────────────────────────────────────────────
+
+export type ImplantacaoEtapa = 'pre' | 'corrida' | 'onboarding' | 'curral';
+export type ImplantacaoStatus = 'fluindo' | 'aguardando' | 'travado';
+export type DemandaPrioridade = 'baixa' | 'media' | 'alta' | 'critica';
+export type DemandaTipo = 'pista' | 'curral';
+
+export interface ImplantacaoDemanda {
+  id: string;
+  implantacaoId: string;
+  descricao: string;
+  concluida: boolean;
+  adquirente: string | null;
+  prioridade: DemandaPrioridade;
+  tipo: DemandaTipo;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ImplantacaoCliente {
+  id: string;
+  clienteId: string;
+  clienteRazaoSocial: string;
+  clienteNomeFantasia: string | null;
+  etapa: ImplantacaoEtapa;
+  status: ImplantacaoStatus | null;
+  responsavel: string | null;
+  donoContato: string | null;
+  adquirentes: string[] | null;
+  dataEntradaCurral: string | null;
+  etapaIniciadaEm: string | null;
+  observacoes: string | null;
+  progressJson: unknown | null;
+  ultimoMovimento: string | null;
+  createdAt: string;
+  updatedAt: string;
+  demandas: ImplantacaoDemanda[] | null;
+}
+
 // ── Experiência do Cliente ──────────────────────────────────────────────────
 
 export interface VariacaoMetrica {

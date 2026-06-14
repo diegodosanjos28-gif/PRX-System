@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/conciliacao
-    username: conciliacao
-    password: conciliacao123
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/conciliacao}
+    username: ${DB_USERNAME:conciliacao}
+    password: ${DB_PASSWORD:conciliacao123}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -26,7 +26,7 @@ jwt:
   expiration: ${JWT_EXPIRATION_MS:28800000}
 
 crypto:
-  secret-key: ${CRYPTO_SECRET_KEY:must-be-replaced-in-production-32ch}
+  secret-key: ${CRYPTO_SECRET_KEY:-change-this-crypto-key-in-production}
 
 anthropic:
   api-key: ${ANTHROPIC_API_KEY:}
@@ -36,8 +36,8 @@ anthropic:
 
 meta:
   access-token: ${META_ACCESS_TOKEN:}
-  phone-number-id: ${META_NUMBER:}
-  webhook-secret: ${META_WEBHOOK_SECRET:}
+  phone-number-id: ${META_PHONE_NUMBER_ID:914156325110895}
+  webhook-secret: ${META_WEBHOOK_SECRET:secret-webhook}
   base-url: https://graph.facebook.com/v25.0
 
 

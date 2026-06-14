@@ -61,6 +61,36 @@ export interface TemplateRequest {
   variaveis?: TemplateVariavelRequest[];
 }
 
+// ── Implantações ──────────────────────────────────────────────────────────
+
+export interface ImplantacaoClienteRequest {
+  clienteId: string;
+  etapa: string;
+  status: string | null;
+  responsavel?: string;
+  donoContato?: string;
+  adquirentes?: string[];
+  observacoes?: string;
+  progressJson?: unknown;
+  etapaIniciadaEm?: string | null;
+  ultimoMovimento?: string | null;
+}
+
+export interface ImplantacaoDemandaRequest {
+  descricao: string;
+  prioridade?: string;
+  adquirente?: string;
+  tipo?: string;
+}
+
+export interface ImplantacaoDemandaPatchRequest {
+  descricao?: string;
+  concluida?: boolean;
+  prioridade?: string;
+  adquirente?: string;
+  tipo?: string;
+}
+
 export interface ApiError {
   timestamp: string;
   status: number;

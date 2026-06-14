@@ -55,3 +55,49 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── Keyframes PRX ───────────────────────────────────────────────── */
+@keyframes prx-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes prx-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes prx-travado-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  50%       { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.14); }
+}
+
+/* ── Classes de animação ─────────────────────────────────────────── */
+.anim-fade-in-up {
+  animation: prx-fade-in-up 0.32s ease-out both;
+}
+
+.anim-fade-in {
+  animation: prx-fade-in 0.28s ease-out both;
+}
+
+.anim-travado {
+  animation: prx-travado-pulse 2.8s ease-in-out infinite;
+}
+
+/* ── Respeito ao motion-reduce ───────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade-in-up,
+  .anim-fade-in,
+  .anim-travado {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

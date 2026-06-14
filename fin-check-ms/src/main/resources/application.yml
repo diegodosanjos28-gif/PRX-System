@@ -42,7 +42,7 @@ coleta:
   max-retries: ${COLETA_MAX_RETRIES:3}
 
 crypto:
-  secret-key: ${CRYPTO_SECRET_KEY:must-be-replaced-in-production-32ch}
+  secret-key: must-be-replaced-in-production-32ch
 
 playwright:
   headless: ${PLAYWRIGHT_HEADLESS:true}

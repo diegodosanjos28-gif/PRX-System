@@ -2,14 +2,15 @@
 import { usePathname } from 'next/navigation';
 
 const titles: Record<string, string> = {
-  '/dashboard':    'Dashboard',
-  '/clientes':     'Clientes',
-  '/recebimentos': 'Recebimentos',
-  '/conciliacao':  'Conciliação de Taxas',
-  '/auditoria':    'Auditoria de Taxas',
-  '/mensagens':    'Mensagens',
-  '/coleta':       'Coleta Manual',
-  '/logs':         'Logs de Coleta',
+  '/dashboard':          'Dashboard',
+  '/clientes':           'Clientes',
+  '/implantacoes':       'Implantações',
+  '/recebimentos':       'Recebimentos',
+  '/conciliacao':        'Conciliação de Taxas',
+  '/auditoria':          'Auditoria de Taxas',
+  '/mensagens':          'Mensagens',
+  '/coleta':             'Coleta Manual',
+  '/logs':               'Logs de Coleta',
 };
 
 export function Header() {
