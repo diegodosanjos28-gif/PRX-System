@@ -18,22 +18,41 @@ public interface ImplantacaoMapper {
 
     ObjectMapper JSON = new ObjectMapper();
 
-    // ── Listagem: sem demandas (evita N+1) ──────────────────────────────────
-    @Mapping(target = "clienteId",          source = "cliente.id")
-    @Mapping(target = "clienteRazaoSocial", source = "cliente.razaoSocial")
-    @Mapping(target = "clienteNomeFantasia",source = "cliente.nomeFantasia")
-    @Mapping(target = "adquirentes",  expression = "java(stringToJsonNode(entity.getAdquirentes()))")
-    @Mapping(target = "progressJson", expression = "java(stringToJsonNode(entity.getProgressJson()))")
-    @Mapping(target = "demandas",     ignore = true)
+    // ── Listagem: sem demandas (evita N+1); campos de resumo preenchidos pelo service ──
+    @Mapping(target = "clienteId",               source = "cliente.id")
+    @Mapping(target = "clienteRazaoSocial",      source = "cliente.razaoSocial")
+    @Mapping(target = "clienteNomeFantasia",     source = "cliente.nomeFantasia")
+    @Mapping(target = "adquirentes",             expression = "java(stringToJsonNode(entity.getAdquirentes()))")
+    @Mapping(target = "progressJson",            expression = "java(stringToJsonNode(entity.getProgressJson()))")
+    @Mapping(target = "demandas",                ignore = true)
+    @Mapping(target = "demandasAbertasCount",    ignore = true)
+    @Mapping(target = "maiorPrioridadeAberta",   ignore = true)
     ImplantacaoClienteResponse toListResponse(ImplantacaoCliente entity);
 
     // ── Detalhe: com demandas (JOIN FETCH garante que já estão carregadas) ──
-    @Mapping(target = "clienteId",          source = "cliente.id")
-    @Mapping(target = "clienteRazaoSocial", source = "cliente.razaoSocial")
-    @Mapping(target = "clienteNomeFantasia",source = "cliente.nomeFantasia")
-    @Mapping(target = "adquirentes",  expression = "java(stringToJsonNode(entity.getAdquirentes()))")
-    @Mapping(target = "progressJson", expression = "java(stringToJsonNode(entity.getProgressJson()))")
+    @Mapping(target = "clienteId",               source = "cliente.id")
+    @Mapping(target = "clienteRazaoSocial",      source = "cliente.razaoSocial")
+    @Mapping(target = "clienteNomeFantasia",     source = "cliente.nomeFantasia")
+    @Mapping(target = "adquirentes",             expression = "java(stringToJsonNode(entity.getAdquirentes()))")
+    @Mapping(target = "progressJson",            expression = "java(stringToJsonNode(entity.getProgressJson()))")
+    @Mapping(target = "demandasAbertasCount",    ignore = true)
+    @Mapping(target = "maiorPrioridadeAberta",   ignore = true)
     ImplantacaoClienteResponse toDetailResponse(ImplantacaoCliente entity);
+
+    // ── Listagem enriquecida com resumo de demandas ───────────────────────────
+    default ImplantacaoClienteResponse toListResponseComResumo(
+            ImplantacaoCliente entity, int demandasAbertasCount, String maiorPrioridadeAberta) {
+        ImplantacaoClienteResponse base = toListResponse(entity);
+        return new ImplantacaoClienteResponse(
+            base.id(), base.clienteId(), base.clienteRazaoSocial(), base.clienteNomeFantasia(),
+            base.etapa(), base.status(), base.responsavel(), base.donoContato(),
+            base.adquirentes(), base.dataEntradaCurral(), base.etapaIniciadaEm(),
+            base.observacoes(), base.progressJson(), base.ultimoMovimento(),
+            base.createdAt(), base.updatedAt(),
+            base.demandas(),
+            demandasAbertasCount, maiorPrioridadeAberta
+        );
+    }
 
     // ── Demanda ──────────────────────────────────────────────────────────────
     @Mapping(target = "implantacaoId", source = "implantacao.id")

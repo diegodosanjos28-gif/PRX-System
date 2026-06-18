@@ -25,5 +25,8 @@ public record ImplantacaoClienteResponse(
     LocalDateTime createdAt,
     LocalDateTime updatedAt,
     // null na listagem, populado no detalhe (GET /{id})
-    List<ImplantacaoDemandaResponse> demandas
+    List<ImplantacaoDemandaResponse> demandas,
+    // resumo leve para o Curral (sempre presentes na listagem, 0/null no detalhe)
+    int demandasAbertasCount,
+    String maiorPrioridadeAberta
 ) {}

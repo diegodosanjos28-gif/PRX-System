@@ -20,7 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,10 +40,37 @@ public class ImplantacaoService {
 
     @Transactional(readOnly = true)
     public List<ImplantacaoClienteResponse> listarTodos() {
-        return implantacaoRepo.findAllComCliente()
+        List<ImplantacaoCliente> todos = implantacaoRepo.findAllComCliente();
+
+        // Uma query agrega count + maior prioridade de todas as implantações de uma vez
+        Map<UUID, long[]> resumoMap = demandaRepo.findResumoAbertasPorImplantacao()
                 .stream()
-                .map(mapper::toListResponse)
+                .collect(Collectors.toMap(
+                        r -> (UUID) r[0],
+                        r -> new long[]{
+                                ((Number) r[1]).longValue(),
+                                ((Number) r[2]).longValue()
+                        }
+                ));
+
+        return todos.stream()
+                .map(impl -> {
+                    long[] resumo = resumoMap.getOrDefault(impl.getId(), new long[]{0L, 0L});
+                    int count           = (int) resumo[0];
+                    String prioridade   = rankToPrioridade((int) resumo[1]);
+                    return mapper.toListResponseComResumo(impl, count, prioridade);
+                })
                 .toList();
+    }
+
+    private static String rankToPrioridade(int rank) {
+        return switch (rank) {
+            case 4  -> "critica";
+            case 3  -> "alta";
+            case 2  -> "media";
+            case 1  -> "baixa";
+            default -> null;
+        };
     }
 
     // ── Detalhe ───────────────────────────────────────────────────────────────
