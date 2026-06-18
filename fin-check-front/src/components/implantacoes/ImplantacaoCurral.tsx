@@ -3,23 +3,21 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
-import { ImplantacaoCliente, ImplantacaoDemanda } from '@/lib/types/entities';
+import { ImplantacaoCliente } from '@/lib/types/entities';
 
 // ─── Mood ─────────────────────────────────────────────────────────────────────
 
-function computeMood(demandas: ImplantacaoDemanda[] | null): {
-  key: string; emoji: string; label: string; color: string; op: string;
-} {
-  const open = (demandas ?? []).filter((d) => !d.concluida);
-  const count = open.length;
-  if (count === 0) return { key: 'campeao',    emoji: '🏆', label: 'Campeão',    color: '#207A4F', op: 'Cliente saudável' };
-  const oldestDays = Math.max(
-    ...open.map((d) => Math.floor((Date.now() - new Date(d.createdAt).getTime()) / 86_400_000)),
-  );
-  if (count >= 6 || oldestDays >= 14) return { key: 'critico',    emoji: '🔥', label: 'Crítico',    color: '#D9534F', op: 'Intervenção urgente' };
-  if (count >= 4 || oldestDays >= 7)  return { key: 'irritado',   emoji: '😤', label: 'Irritado',   color: '#B04020', op: 'Demanda acumulada' };
-  if (count >= 2 || oldestDays >= 4)  return { key: 'preocupado', emoji: '😟', label: 'Preocupado', color: '#E8A100', op: 'Atenção operacional' };
-  return                                      { key: 'tranquilo',  emoji: '😊', label: 'Tranquilo',  color: '#00A19B', op: 'Operação estável' };
+type MoodResult = { key: string; emoji: string; label: string; color: string; op: string };
+
+function computeMood(count: number, maiorPrioridade: string | null): MoodResult {
+  if (count === 0) {
+    return { key: 'campeao',    emoji: '🏆', label: 'Campeão',  color: '#207A4F', op: 'Cliente saudável' };
+  }
+  if (maiorPrioridade === 'alta' || maiorPrioridade === 'critica') {
+    return { key: 'critico',    emoji: '🔥', label: 'Crítico',  color: '#D9534F', op: 'Intervenção urgente' };
+  }
+  // baixa ou media
+  return   { key: 'preocupado', emoji: '😟', label: 'Atenção',  color: '#E8A100', op: 'Atenção operacional' };
 }
 
 // ─── Coat helpers ─────────────────────────────────────────────────────────────
@@ -141,18 +139,17 @@ function applyMoodFilter(
   impls: ImplantacaoCliente[],
   filter: CurralFilter,
 ): ImplantacaoCliente[] {
-  if (filter === 'todos') return impls;
-  if (filter === 'saudaveis') return impls.filter((i) => {
-    const m = computeMood(i.demandas);
-    return m.key === 'campeao' || m.key === 'tranquilo';
-  });
-  if (filter === 'atencao') return impls.filter((i) => {
-    const m = computeMood(i.demandas);
-    return m.key === 'preocupado' || m.key === 'irritado';
-  });
-  if (filter === 'criticos') return impls.filter((i) => computeMood(i.demandas).key === 'critico');
-  if (filter === 'abertas')  return impls.filter((i) => (i.demandas ?? []).some((d) => !d.concluida));
-  if (filter === 'sem-abertas') return impls.filter((i) => (i.demandas ?? []).every((d) => d.concluida));
+  if (filter === 'todos')       return impls;
+  if (filter === 'saudaveis')   return impls.filter((i) => i.demandasAbertasCount === 0);
+  if (filter === 'atencao')     return impls.filter((i) =>
+    i.demandasAbertasCount > 0 &&
+    (i.maiorPrioridadeAberta === 'baixa' || i.maiorPrioridadeAberta === 'media'),
+  );
+  if (filter === 'criticos')    return impls.filter((i) =>
+    i.maiorPrioridadeAberta === 'alta' || i.maiorPrioridadeAberta === 'critica',
+  );
+  if (filter === 'abertas')     return impls.filter((i) => i.demandasAbertasCount > 0);
+  if (filter === 'sem-abertas') return impls.filter((i) => i.demandasAbertasCount === 0);
   return impls;
 }
 
@@ -481,8 +478,8 @@ export function ImplantacaoCurral({ implantacoes }: Props) {
               </div>
             ) : (
               curralFiltered.map((impl) => {
-                const mood      = computeMood(impl.demandas);
-                const openCount = (impl.demandas ?? []).filter((d) => !d.concluida).length;
+                const mood      = computeMood(impl.demandasAbertasCount, impl.maiorPrioridadeAberta);
+                const openCount = impl.demandasAbertasCount;
                 const isCrit    = mood.key === 'critico';
                 const hasOpen   = openCount > 0;
 

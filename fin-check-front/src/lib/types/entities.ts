@@ -204,6 +204,9 @@ export interface ImplantacaoCliente {
   createdAt: string;
   updatedAt: string;
   demandas: ImplantacaoDemanda[] | null;
+  // campos leves retornados pela listagem para o Curral calcular o status
+  demandasAbertasCount: number;
+  maiorPrioridadeAberta: DemandaPrioridade | null;
 }
 
 // ── Experiência do Cliente ──────────────────────────────────────────────────
