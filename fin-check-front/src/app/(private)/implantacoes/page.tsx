@@ -5,8 +5,8 @@ import { useImplantacoes } from '@/lib/hooks/useImplantacoes';
 import { ImplantacaoKpiBar } from '@/components/implantacoes/ImplantacaoKpiBar';
 import { ImplantacaoAttentionPanel } from '@/components/implantacoes/ImplantacaoAttentionPanel';
 import { ImplantacaoDerbyTrack } from '@/components/implantacoes/ImplantacaoDerbyTrack';
-import { ImplantacaoPipeline } from '@/components/implantacoes/ImplantacaoPipeline';
-import { ImplantacaoTable } from '@/components/implantacoes/ImplantacaoTable';
+import { ImplantacaoCompactTable } from '@/components/implantacoes/ImplantacaoCompactTable';
+import { ImplantacaoCurral } from '@/components/implantacoes/ImplantacaoCurral';
 import {
   ImplantacaoFiltros,
   applyFiltro,
@@ -36,20 +36,16 @@ export default function ImplantacoesPage() {
         <LoadingSpinner />
       ) : (
         <>
-          {/* KPIs e Atenção: sempre com dados totais (não filtrados) */}
+          {/* KPIs e Atenção: sempre dados totais */}
           <ImplantacaoKpiBar implantacoes={allData} />
           <ImplantacaoAttentionPanel implantacoes={allData} />
 
-          {/* Filtros rápidos */}
+          {/* Filtros gerais */}
           <ImplantacaoFiltros
             implantacoes={allData}
             active={filtro}
             onChange={setFiltro}
           />
-
-          {/* Pista Derby, Pipeline e Tabela: com dados filtrados */}
-          <ImplantacaoDerbyTrack implantacoes={filteredData} />
-          <ImplantacaoPipeline implantacoes={filteredData} />
 
           {!allData.length ? (
             <EmptyState />
@@ -58,7 +54,45 @@ export default function ImplantacoesPage() {
               Nenhuma implantação neste filtro.
             </p>
           ) : (
-            <ImplantacaoTable implantacoes={filteredData} />
+            <>
+              {/* 1. Derby Track — pista, cavalos em andamento, faixa de chegada */}
+              <ImplantacaoDerbyTrack implantacoes={filteredData} />
+
+              {/* 2. Resumo compacto da implantação */}
+              <ImplantacaoCompactTable implantacoes={filteredData} />
+
+              {/* 3. Legenda de status */}
+              <div style={{
+                display: 'flex', gap: 18, flexWrap: 'wrap',
+                padding: '14px 18px',
+                background: '#fff',
+                border: '1px solid #E6E9EC',
+                borderRadius: 16,
+              }}>
+                {[
+                  { color: '#00A19B', label: 'Fluindo no prazo' },
+                  { color: '#E8A100', label: 'Atenção / aguardando terceiro' },
+                  { color: '#D9534F', label: 'Travado / crítico' },
+                ].map(({ color, label }) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#6B7178' }}>
+                    <span style={{ width: 11, height: 11, borderRadius: 4, background: color, display: 'inline-block', flexShrink: 0 }} />
+                    {label}
+                  </div>
+                ))}
+                {[
+                  { em: '🥩', label: 'Box de largada' },
+                  { em: '🏁', label: 'Onboarding concluído' },
+                ].map(({ em, label }) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#6B7178' }}>
+                    <span style={{ fontSize: 16 }}>{em}</span>
+                    {label}
+                  </div>
+                ))}
+              </div>
+
+              {/* 4. Currais Operacionais — seção header + filtros + fazenda */}
+              <ImplantacaoCurral implantacoes={filteredData} />
+            </>
           )}
         </>
       )}

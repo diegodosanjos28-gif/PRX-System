@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ImplantacaoCliente } from '@/lib/types/entities';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Derby helpers ────────────────────────────────────────────────────────────
 
 function computeProgress(progressJson: unknown): number {
   if (!Array.isArray(progressJson) || progressJson.length === 0) return 0;
@@ -72,22 +72,21 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
   ) as Record<(typeof stageKeys)[number], ImplantacaoCliente[]>;
 
   const trackImplantacoes = implantacoes.filter((i) => i.etapa !== 'curral');
-  const curralImplantacoes = grouped.curral;
+  const curralCount       = grouped.curral.length;
 
   return (
     <>
-      {/* ── CSS Animations ───────────────────────────────────────────────── */}
       <style>{`
         @keyframes derby-drift {
           from { background-position: 0 0; }
           to   { background-position: 60px 0; }
         }
         @keyframes derby-gallop {
-          0%,100% { transform: translateY(0);   }
-          50%      { transform: translateY(-3px); }
+          0%,100% { transform: translateY(0); }
+          50%     { transform: translateY(-3px); }
         }
         @keyframes derby-puff {
-          0%,100% { transform: translateY(0) scale(1);    opacity: .7; }
+          0%,100% { transform: translateY(0) scale(1); opacity: .7; }
           50%     { transform: translateY(-5px) scale(1.18); opacity: .3; }
         }
         .derby-clouds {
@@ -103,19 +102,18 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
           opacity: .95;
           animation: derby-drift 60s linear infinite;
         }
-        .derby-horse { transition: left 1s cubic-bezier(.22,1,.36,1); }
-        .derby-gallop { animation: derby-gallop .6s ease-in-out infinite; }
+        .derby-horse   { transition: left 1s cubic-bezier(.22,1,.36,1); }
+        .derby-gallop  { animation: derby-gallop .6s ease-in-out infinite; }
         .derby-dust span {
           display: block; border-radius: 50%;
           background: rgba(160,210,120,.90);
           animation: derby-puff 1.1s ease-in-out infinite;
         }
-        .derby-dust span:nth-child(1) { width:13px; height:13px; animation-delay:0s;   }
-        .derby-dust span:nth-child(2) { width: 9px; height: 9px; animation-delay:.18s; opacity:.8; }
-        .derby-dust span:nth-child(3) { width: 6px; height: 6px; animation-delay:.36s; opacity:.6; }
+        .derby-dust span:nth-child(1) { width:13px; height:13px; animation-delay:0s; }
+        .derby-dust span:nth-child(2) { width:9px;  height:9px;  animation-delay:.18s; opacity:.8; }
+        .derby-dust span:nth-child(3) { width:6px;  height:6px;  animation-delay:.36s; opacity:.6; }
       `}</style>
 
-      {/* ── Outer wrapper ────────────────────────────────────────────────── */}
       <div style={{
         border: '1px solid #E6E9EC',
         borderRadius: 22,
@@ -123,8 +121,7 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
         overflow: 'hidden',
         background: '#fff',
       }}>
-
-        {/* ── Stage header (dark bar) ─────────────────────────────────── */}
+        {/* ── Stage header ─────────────────────────────────────────────────── */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1.05fr 1.7fr 1fr 96px',
@@ -185,13 +182,13 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
                 CURRAL
               </div>
               <div style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>
-                {curralImplantacoes.length}
+                {curralCount}
               </div>
             </div>
           </div>
         </div>
 
-        {/* ── Sky scene ──────────────────────────────────────────────────── */}
+        {/* ── Sky scene ────────────────────────────────────────────────────── */}
         <div style={{
           position: 'relative',
           height: 110,
@@ -199,7 +196,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
           overflow: 'hidden',
           flexShrink: 0,
         }}>
-          {/* Sun */}
           <div style={{
             position: 'absolute', top: 14, right: 120,
             width: 50, height: 50, borderRadius: '50%',
@@ -207,11 +203,7 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
             boxShadow: '0 0 36px rgba(255,224,122,.7)',
             zIndex: 0,
           }} />
-
-          {/* Clouds */}
           <div className="derby-clouds" style={{ position: 'absolute', inset: 0 }} />
-
-          {/* Hills */}
           <div style={{
             position: 'absolute', left: 0, right: 0, bottom: 36, height: 50,
             background: `
@@ -222,8 +214,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
             backgroundRepeat: 'no-repeat',
             zIndex: 1,
           }} />
-
-          {/* Trees */}
           <div style={{
             position: 'absolute', left: 0, right: 0, bottom: 22, height: 40,
             background: `
@@ -240,8 +230,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
             backgroundRepeat: 'no-repeat',
             zIndex: 2,
           }} />
-
-          {/* Fence */}
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 10, height: 22, zIndex: 3 }}>
             <div style={{
               position: 'absolute', left: 0, right: 0, top: 3, height: 3,
@@ -253,8 +241,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
               background: 'repeating-linear-gradient(90deg,#fff 0 4px,transparent 4px 38px)',
             }} />
           </div>
-
-          {/* Turf gradient transition */}
           <div style={{
             position: 'absolute', left: 0, right: 0, bottom: 0, height: 16,
             background: 'linear-gradient(180deg,#74B85E,#4FA63F)',
@@ -262,7 +248,7 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
           }} />
         </div>
 
-        {/* ── Track lanes ────────────────────────────────────────────────── */}
+        {/* ── Track lanes ──────────────────────────────────────────────────── */}
         <div style={{
           position: 'relative',
           background: 'linear-gradient(180deg,#72C35A 0%,#61B84E 50%,#4FA63F 100%)',
@@ -270,7 +256,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
           minHeight: trackImplantacoes.length === 0 ? 100 : undefined,
           overflowX: 'auto',
         }}>
-          {/* Stage separator — Pré-Largada / Corrida */}
           <div style={{
             position: 'absolute', top: 0, bottom: 0, left: '29%',
             borderLeft: '2px dashed rgba(255,255,255,.92)',
@@ -284,8 +269,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
               letterSpacing: '.4px', whiteSpace: 'nowrap',
             }}>LARGADA</span>
           </div>
-
-          {/* Onboarding separator at 64% */}
           <div style={{
             position: 'absolute', top: 0, bottom: 0, left: '64%',
             borderLeft: '2px dashed rgba(255,255,255,.55)',
@@ -299,8 +282,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
               letterSpacing: '.4px', whiteSpace: 'nowrap',
             }}>ONBOARDING</span>
           </div>
-
-          {/* Finish line */}
           <div style={{
             position: 'absolute', top: 0, bottom: 0, right: 96, width: 18,
             background: 'repeating-linear-gradient(0deg,#1c2024 0 10px,#fff 10px 20px)',
@@ -310,7 +291,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
             <span style={{ position: 'absolute', top: -2, left: '50%', transform: 'translateX(-50%)', fontSize: 14 }}>🏁</span>
           </div>
 
-          {/* Empty state */}
           {trackImplantacoes.length === 0 && (
             <div style={{
               textAlign: 'center', padding: '36px 0',
@@ -320,13 +300,12 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
             </div>
           )}
 
-          {/* One lane per implantação */}
           {trackImplantacoes.map((impl, idx) => {
-            const pct  = computeProgress(impl.progressJson);
-            const pos  = trackPos(impl.etapa, pct);
-            const st   = STATUS_STYLE[(impl.status ?? 'fluindo') as keyof typeof STATUS_STYLE] ?? STATUS_STYLE.fluindo;
-            const rem  = daysRemaining(impl.etapaIniciadaEm);
-            const tCls = timerCls(rem);
+            const pct       = computeProgress(impl.progressJson);
+            const pos       = trackPos(impl.etapa, pct);
+            const st        = STATUS_STYLE[(impl.status ?? 'fluindo') as keyof typeof STATUS_STYLE] ?? STATUS_STYLE.fluindo;
+            const rem       = daysRemaining(impl.etapaIniciadaEm);
+            const tCls      = timerCls(rem);
             const isTravado = impl.status === 'travado';
             const stageMeta = STAGE_META[impl.etapa as keyof typeof STAGE_META];
 
@@ -343,14 +322,11 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
                 }}
                 title={`${impl.clienteRazaoSocial}${impl.responsavel ? ` — ${impl.responsavel}` : ''}`}
               >
-                {/* Lane bottom line */}
                 <div style={{
                   position: 'absolute', left: 0, right: 0, bottom: 0, height: 2,
                   background: 'rgba(255,255,255,.85)',
                   pointerEvents: 'none',
                 }} />
-
-                {/* Horse group */}
                 <div
                   className="derby-horse"
                   style={{
@@ -366,7 +342,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
                     cursor: 'pointer',
                   }}
                 >
-                  {/* ── Name card ──────────────────────────────────────── */}
                   <div style={{
                     position: 'relative',
                     background: 'rgba(255,255,255,.96)',
@@ -383,7 +358,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
                     alignItems: 'center',
                     whiteSpace: 'nowrap',
                   }}>
-                    {/* Status badge */}
                     <div style={{
                       position: 'absolute', top: -9, right: -6,
                       fontSize: 9, fontWeight: 800,
@@ -393,8 +367,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
                       boxShadow: '0 3px 8px rgba(0,0,0,.22)',
                       zIndex: 5, letterSpacing: '.3px',
                     }}>{st.badge}</div>
-
-                    {/* Caret */}
                     <div style={{
                       position: 'absolute', left: '50%', bottom: -6,
                       transform: 'translateX(-50%)',
@@ -403,8 +375,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
                       borderRight: '6px solid transparent',
                       borderTop: '6px solid rgba(255,255,255,.96)',
                     }} />
-
-                    {/* Client name */}
                     <div style={{
                       fontSize: 10, fontWeight: 800, letterSpacing: '.1px',
                       lineHeight: 1.1, color: '#1C2024',
@@ -412,8 +382,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
                     }}>
                       {impl.clienteRazaoSocial}
                     </div>
-
-                    {/* Stage + progress + responsável */}
                     <div style={{
                       fontSize: 8.5, color: '#6B7178', fontWeight: 700,
                       marginTop: 1, display: 'flex', alignItems: 'center',
@@ -427,8 +395,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
                         </>
                       )}
                     </div>
-
-                    {/* Mini progress bar */}
                     <div style={{
                       height: 4, width: '100%', minWidth: 108,
                       borderRadius: 3, background: 'rgba(0,0,0,.1)',
@@ -443,12 +409,10 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
                     </div>
                   </div>
 
-                  {/* ── Horse body ─────────────────────────────────────── */}
                   <div
                     className={isTravado ? undefined : 'derby-gallop'}
                     style={{ position: 'relative', display: 'inline-flex', alignItems: 'flex-end' }}
                   >
-                    {/* Dust particles behind horse */}
                     <div className="derby-dust" style={{
                       position: 'absolute', bottom: 6, right: '88%',
                       display: 'flex', alignItems: 'flex-end',
@@ -456,16 +420,12 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
                     }}>
                       <span /><span /><span />
                     </div>
-
-                    {/* Elliptic shadow */}
                     <div style={{
                       position: 'absolute', bottom: 2, left: '52%',
                       transform: 'translateX(-50%)',
                       width: 70, height: 9, borderRadius: '50%',
                       background: 'rgba(0,60,0,.22)', filter: 'blur(3px)', zIndex: 1,
                     }} />
-
-                    {/* Horse emoji */}
                     <span style={{
                       fontSize: 44, lineHeight: 1,
                       display: 'block', position: 'relative', zIndex: 2,
@@ -478,7 +438,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
                     </span>
                   </div>
 
-                  {/* ── Timer tag ──────────────────────────────────────── */}
                   {rem !== null && (
                     <div style={{
                       marginTop: 3, fontSize: 8.5, fontWeight: 800, letterSpacing: '.2px',
@@ -495,39 +454,6 @@ export function ImplantacaoDerbyTrack({ implantacoes }: Props) {
             );
           })}
         </div>
-
-        {/* ── Curral (finished) section ───────────────────────────────────── */}
-        {curralImplantacoes.length > 0 && (
-          <div style={{
-            borderTop: '1px solid #E6E9EC',
-            padding: '10px 16px 12px',
-            background: '#F4F6F7',
-          }}>
-            <div style={{
-              fontSize: 11, fontWeight: 700, color: '#6B7178',
-              marginBottom: 8, letterSpacing: '.3px', textTransform: 'uppercase',
-            }}>
-              🏆 Curral — Concluídas ({curralImplantacoes.length})
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {curralImplantacoes.map((impl) => (
-                <Link
-                  key={impl.id}
-                  href={`/implantacoes/${impl.id}`}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '4px 10px', borderRadius: 8,
-                    background: '#E4F4EC', border: '1px solid #B7E2CC',
-                    fontSize: 12, fontWeight: 600, color: '#207A4F',
-                    textDecoration: 'none',
-                  }}
-                >
-                  🏁 {impl.clienteRazaoSocial}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </>
   );
