@@ -11,13 +11,14 @@ type MoodResult = { key: string; emoji: string; label: string; color: string; op
 
 function computeMood(count: number, maiorPrioridade: string | null): MoodResult {
   if (count === 0) {
-    return { key: 'campeao',    emoji: '🏆', label: 'Campeão',  color: '#207A4F', op: 'Cliente saudável' };
+    return { key: 'campeao',    emoji: '🏆', label: 'Campeão', color: '#207A4F', op: 'Cliente saudável' };
   }
-  if (maiorPrioridade === 'alta' || maiorPrioridade === 'critica') {
-    return { key: 'critico',    emoji: '🔥', label: 'Crítico',  color: '#D9534F', op: 'Intervenção urgente' };
+  // critico: prioridade alta/critica OU 3+ demandas abertas independente de prioridade
+  if (count >= 3 || maiorPrioridade === 'alta' || maiorPrioridade === 'critica') {
+    return { key: 'critico',    emoji: '🔥', label: 'Crítico', color: '#D9534F', op: 'Intervenção urgente' };
   }
-  // baixa ou media
-  return   { key: 'preocupado', emoji: '😟', label: 'Atenção',  color: '#E8A100', op: 'Atenção operacional' };
+  // atenção: 1 ou 2 demandas abertas de baixa/media
+  return   { key: 'preocupado', emoji: '😟', label: 'Atenção', color: '#E8A100', op: 'Atenção operacional' };
 }
 
 // ─── Coat helpers ─────────────────────────────────────────────────────────────
@@ -143,10 +144,13 @@ function applyMoodFilter(
   if (filter === 'saudaveis')   return impls.filter((i) => i.demandasAbertasCount === 0);
   if (filter === 'atencao')     return impls.filter((i) =>
     i.demandasAbertasCount > 0 &&
+    i.demandasAbertasCount < 3 &&
     (i.maiorPrioridadeAberta === 'baixa' || i.maiorPrioridadeAberta === 'media'),
   );
   if (filter === 'criticos')    return impls.filter((i) =>
-    i.maiorPrioridadeAberta === 'alta' || i.maiorPrioridadeAberta === 'critica',
+    i.demandasAbertasCount >= 3 ||
+    i.maiorPrioridadeAberta === 'alta' ||
+    i.maiorPrioridadeAberta === 'critica',
   );
   if (filter === 'abertas')     return impls.filter((i) => i.demandasAbertasCount > 0);
   if (filter === 'sem-abertas') return impls.filter((i) => i.demandasAbertasCount === 0);
