@@ -32,13 +32,15 @@ const ALL = 'all';
 export default function LogsPage() {
   const [status, setStatus] = useState(ALL);
 
-  const { data: logs, isLoading, isError } = useQuery({
+  const { data: rawLogs, isLoading, isError } = useQuery({
     queryKey: ['logs', status],
     queryFn: () => getLogs({ status: status === ALL ? undefined : status }),
-    meta: {
-      onError: () => toast.error('Erro ao carregar logs de coleta'),
-    },
+    staleTime: 0,
   });
+
+  // Ordena client-side por data decrescente (backend usa findAll() sem ORDER BY)
+  const logs = [...(rawLogs ?? [])]
+    .sort((a, b) => new Date(b.executadoEm).getTime() - new Date(a.executadoEm).getTime());
 
   if (isError) {
     toast.error('Erro ao carregar logs de coleta');

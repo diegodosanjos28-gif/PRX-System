@@ -17,12 +17,18 @@ const logVariant: Record<string, 'success' | 'error' | 'warning' | 'neutral'> = 
 export default function DashboardPage() {
   const { data: clientes, isLoading: loadingClientes } = useClientes();
   const { data: logs, isLoading: loadingLogs } = useQuery({
-    queryKey: ['logs'],
+    // queryKey alinhada com a página /logs para compartilhar cache quando possível
+    queryKey: ['logs', 'all'],
     queryFn: () => getLogs(),
+    // staleTime 0: logs mudam com frequência — sempre buscar dado fresco ao montar
+    staleTime: 0,
   });
 
   const ativos = clientes?.filter((c) => c.ativo).length ?? 0;
-  const ultimos5Logs = logs?.slice(0, 5) ?? [];
+  // Ordena por data decrescente client-side (backend usa findAll() sem ORDER BY)
+  const ultimos5Logs = [...(logs ?? [])]
+    .sort((a, b) => new Date(b.executadoEm).getTime() - new Date(a.executadoEm).getTime())
+    .slice(0, 5);
 
   return (
     <div className="space-y-6">
