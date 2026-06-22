@@ -1,7 +1,11 @@
 import axios from 'axios';
 
+// URL relativa — o browser envia para /coletor/* na mesma origem.
+// O servidor Next.js (next.config.mjs rewrites) encaminha server-side
+// para http://coletor:8081 via DNS interno do Docker.
+// Nunca expõe o host do coletor ao browser do usuário.
 const coletorApi = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_COLETOR_URL ?? 'http://localhost:8081',
+  baseURL: '/coletor',
 });
 
 export interface ColetaAcceptedResponse {

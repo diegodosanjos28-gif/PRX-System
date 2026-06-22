@@ -20,6 +20,8 @@ import { DemandaSection } from '@/components/implantacoes/DemandaSection';
 import {
   ImplantacaoChecklist,
   DEFAULT_CHECKLIST,
+  ChecklistItem,
+  isItemConcluido,
 } from '@/components/implantacoes/ImplantacaoChecklist';
 import { ImplantacaoHistorico } from '@/components/implantacoes/ImplantacaoHistorico';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -111,26 +113,19 @@ export default function ImplantacaoDetailPage() {
   if (isLoading) return <LoadingSpinner />;
   if (!impl) return <p className="text-muted-foreground">Implantação não encontrada.</p>;
 
-  const toggleChecklistItem = (index: number) => {
-    const rawItems = impl.progressJson;
-    if (!Array.isArray(rawItems) || rawItems.length === 0) return;
-
-    const updated = (rawItems as { label: string; concluido: boolean }[]).map((item, i) =>
-      i === index ? { ...item, concluido: !item.concluido } : item,
-    );
-
+  const saveChecklist = (newItems: ChecklistItem[]) => {
     updateImpl(
       {
         id: impl.id,
         data: {
-          clienteId:   impl.clienteId,
-          etapa:       impl.etapa,
-          status:      impl.status ?? null,
-          responsavel: impl.responsavel ?? undefined,
-          donoContato: impl.donoContato ?? undefined,
-          adquirentes: impl.adquirentes ?? undefined,
-          observacoes: impl.observacoes ?? undefined,
-          progressJson: updated,
+          clienteId:    impl.clienteId,
+          etapa:        impl.etapa,
+          status:       impl.status ?? null,
+          responsavel:  impl.responsavel ?? undefined,
+          donoContato:  impl.donoContato ?? undefined,
+          adquirentes:  impl.adquirentes ?? undefined,
+          observacoes:  impl.observacoes ?? undefined,
+          progressJson: newItems,
         },
       },
       { onError: () => toast.error('Erro ao salvar checklist') },
@@ -139,9 +134,9 @@ export default function ImplantacaoDetailPage() {
 
   // ── Avanço de etapa ───────────────────────────────────────────────────────
   const checklistItems = Array.isArray(impl.progressJson)
-    ? (impl.progressJson as { concluido: boolean }[])
+    ? (impl.progressJson as ChecklistItem[])
     : [];
-  const allDone   = checklistItems.length > 0 && checklistItems.every((item) => item.concluido);
+  const allDone = checklistItems.length > 0 && checklistItems.every(isItemConcluido);
   const nextEtapa = NEXT_ETAPA[impl.etapa];
 
   const advanceEtapa = () => {
@@ -367,7 +362,7 @@ export default function ImplantacaoDetailPage() {
       <ImplantacaoChecklist
         progressJson={impl.progressJson}
         etapa={impl.etapa}
-        onToggle={toggleChecklistItem}
+        onSave={saveChecklist}
         isPending={isUpdating}
       />
 
