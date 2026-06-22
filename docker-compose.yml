@@ -70,14 +70,15 @@ services:
     build:
       context: ./fin-check-front
       dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
     container_name: conciliacao-frontend
     restart: unless-stopped
     depends_on:
       - api
     ports:
       - "3000:3000"
+    environment:
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:8080}
+      COLETOR_INTERNAL_URL: ${COLETOR_INTERNAL_URL:-http://coletor:8081}
 
 volumes:
   postgres_data:
