@@ -15,18 +15,14 @@ import { cn } from '@/lib/utils';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-interface Subtask {
+export interface ChecklistNode {
   label: string;
   concluido: boolean;
+  children?: ChecklistNode[];
 }
 
-export interface ChecklistItem {
-  label: string;
-  concluido: boolean;
-  subtasks?: Subtask[];
-}
-
-// ─── Itens padrão por etapa ──────────────────────────────────────────────────
+// Alias para retrocompatibilidade com page.tsx
+export type ChecklistItem = ChecklistNode;
 
 export const DEFAULT_CHECKLIST: Record<string, string[]> = {
   pre: [
@@ -46,16 +42,42 @@ export const DEFAULT_CHECKLIST: Record<string, string[]> = {
   curral: [],
 };
 
-// ─── Helper exportado: item efetivamente concluído? ──────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-export function isItemConcluido(item: ChecklistItem): boolean {
-  if (!item.subtasks || item.subtasks.length === 0) return item.concluido;
-  return item.subtasks.every((s) => s.concluido);
+// Um nó é concluído quando é folha e concluido=true,
+// ou quando tem filhos e TODOS os filhos são concluídos recursivamente.
+export function isNodeDone(node: ChecklistNode): boolean {
+  if (!node.children || node.children.length === 0) return node.concluido;
+  return node.children.every(isNodeDone);
 }
 
-// ─── Parser de progressJson ──────────────────────────────────────────────────
+// Alias para retrocompatibilidade com page.tsx
+export const isItemConcluido = isNodeDone;
 
-function parseChecklist(progressJson: unknown): ChecklistItem[] | null {
+function pathsEqual(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+// Converte formato antigo (subtasks) para novo (children), recursivamente.
+function migrateNode(raw: unknown): ChecklistNode | null {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.label !== 'string') return null;
+
+  const rawChildren = Array.isArray(obj.children) ? obj.children
+                    : Array.isArray(obj.subtasks)  ? obj.subtasks
+                    : [];
+
+  const children = rawChildren.map(migrateNode).filter((n): n is ChecklistNode => n !== null);
+
+  return {
+    label:     obj.label,
+    concluido: Boolean(obj.concluido),
+    ...(children.length > 0 ? { children } : {}),
+  };
+}
+
+function parseChecklist(progressJson: unknown): ChecklistNode[] | null {
   if (progressJson == null) return null;
   try {
     let data: unknown = progressJson;
@@ -65,236 +87,403 @@ function parseChecklist(progressJson: unknown): ChecklistItem[] | null {
     }
     const arr: unknown = Array.isArray(data)
       ? data
-      : typeof data === 'object' &&
-        data !== null &&
-        Array.isArray((data as Record<string, unknown>).items)
+      : typeof data === 'object' && data !== null && Array.isArray((data as Record<string, unknown>).items)
       ? (data as Record<string, unknown>).items
       : null;
-
     if (!Array.isArray(arr)) return null;
-
-    const parsed = arr
-      .filter(
-        (item): item is Record<string, unknown> =>
-          item !== null &&
-          typeof item === 'object' &&
-          typeof (item as Record<string, unknown>).label === 'string',
-      )
-      .map((item) => {
-        const rawSubs = Array.isArray(item.subtasks) ? item.subtasks : [];
-        const subtasks: Subtask[] = rawSubs
-          .filter(
-            (s): s is Record<string, unknown> =>
-              s !== null &&
-              typeof s === 'object' &&
-              typeof (s as Record<string, unknown>).label === 'string',
-          )
-          .map((s) => ({ label: s.label as string, concluido: Boolean(s.concluido) }));
-        return {
-          label:     item.label as string,
-          concluido: Boolean(item.concluido),
-          ...(subtasks.length > 0 ? { subtasks } : {}),
-        };
-      });
-
+    const parsed = arr.map(migrateNode).filter((n): n is ChecklistNode => n !== null);
     return parsed.length > 0 ? parsed : null;
   } catch {
     return null;
   }
 }
 
-// ─── Estado de edição ─────────────────────────────────────────────────────────
-// O input é NÃO-CONTROLADO (defaultValue, sem value/onChange).
-// Isso garante ZERO re-renders durante a digitação — o DOM gerencia o valor sozinho.
-// editingTarget identifica qual item/subtarefa está em edição.
-// isNew = true marca subtarefas recém-criadas (label vazio) para remoção ao cancelar.
+// ─── Operações imutáveis na árvore ───────────────────────────────────────────
 
-type EditingTarget =
-  | { type: 'item';    itemIdx: number }
-  | { type: 'subtask'; itemIdx: number; subtaskIdx: number; isNew?: boolean };
+// Aplica `updater` no nó em `path` e recalcula `concluido` de cada ancestral (cascade up).
+function updateAtPath(
+  nodes: ChecklistNode[],
+  path: number[],
+  updater: (node: ChecklistNode) => ChecklistNode,
+): ChecklistNode[] {
+  const [idx, ...rest] = path;
+  return nodes.map((node, i) => {
+    if (i !== idx) return node;
+    if (rest.length === 0) return updater(node);
+    const newChildren = updateAtPath(node.children ?? [], rest, updater);
+    return {
+      ...node,
+      children: newChildren,
+      // Cascade up: pai concluído quando todos os filhos estiverem concluídos
+      concluido: newChildren.length > 0 ? newChildren.every(isNodeDone) : node.concluido,
+    };
+  });
+}
 
-type ConfirmState =
-  | { type: 'item';    itemIdx: number }
-  | { type: 'subtask'; itemIdx: number; subtaskIdx: number };
+function getAtPath(nodes: ChecklistNode[], path: number[]): ChecklistNode {
+  const [idx, ...rest] = path;
+  if (rest.length === 0) return nodes[idx];
+  return getAtPath(nodes[idx].children ?? [], rest);
+}
 
-// ─── Componente ───────────────────────────────────────────────────────────────
+// Marca recursivamente todos os nós da subárvore com o mesmo `concluido`.
+function cascadeDown(node: ChecklistNode, concluido: boolean): ChecklistNode {
+  return {
+    ...node,
+    concluido,
+    children: node.children?.map(c => cascadeDown(c, concluido)),
+  };
+}
+
+// Remove o nó em `path` e recalcula `concluido` dos ancestrais.
+function removeAtPath(nodes: ChecklistNode[], path: number[]): ChecklistNode[] {
+  const [idx, ...rest] = path;
+  if (rest.length === 0) return nodes.filter((_, i) => i !== idx);
+  return nodes.map((node, i) => {
+    if (i !== idx) return node;
+    const newChildren = removeAtPath(node.children ?? [], rest);
+    return {
+      ...node,
+      children:  newChildren.length > 0 ? newChildren : undefined,
+      concluido: newChildren.length > 0 ? newChildren.every(isNodeDone) : node.concluido,
+    };
+  });
+}
+
+// Conta apenas folhas (nós sem filhos) para o progresso global.
+function countLeaves(nodes: ChecklistNode[]): { total: number; done: number } {
+  let total = 0, done = 0;
+  for (const node of nodes) {
+    if (!node.children || node.children.length === 0) {
+      total++;
+      if (node.concluido) done++;
+    } else {
+      const sub  = countLeaves(node.children);
+      total += sub.total;
+      done  += sub.done;
+    }
+  }
+  return { total, done };
+}
+
+// ─── Tipos internos ───────────────────────────────────────────────────────────
+
+type EditingTarget = { path: number[]; isNew?: boolean };
+
+// ─── Componente recursivo de nó ──────────────────────────────────────────────
+
+interface NodeItemProps {
+  node:          ChecklistNode;
+  path:          number[];
+  editingTarget: EditingTarget | null;
+  confirmPath:   number[] | null;
+  editInputRef:  React.RefObject<HTMLInputElement>;
+  onToggle:        (path: number[]) => void;
+  onStartEdit:     (path: number[]) => void;
+  onAddChild:      (path: number[]) => void;
+  onRequestDelete: (path: number[]) => void;
+  onCommitEdit:    () => void;
+  onCancelEdit:    () => void;
+  onConfirmDelete: () => void;
+  onCancelDelete:  () => void;
+  canEdit:   boolean;
+  isPending: boolean;
+}
+
+function ChecklistNodeItem({
+  node, path, editingTarget, confirmPath, editInputRef,
+  onToggle, onStartEdit, onAddChild, onRequestDelete,
+  onCommitEdit, onCancelEdit, onConfirmDelete, onCancelDelete,
+  canEdit, isPending,
+}: NodeItemProps) {
+  const isEditing     = editingTarget !== null && pathsEqual(editingTarget.path, path);
+  const isConfirm     = confirmPath   !== null && pathsEqual(confirmPath, path);
+  const hasChildren   = (node.children?.length ?? 0) > 0;
+  const effectiveDone = isNodeDone(node);
+  const depth         = path.length - 1; // 0 = raiz
+
+  const childTotal = node.children?.length ?? 0;
+  const childDone  = node.children?.filter(isNodeDone).length ?? 0;
+
+  const iconCls  = depth === 0 ? 'h-5 w-5' : 'h-4 w-4';
+  const labelCls = cn(
+    'flex-1 min-w-0 leading-snug break-words',
+    depth === 0 ? 'text-base font-medium' : 'text-sm',
+    effectiveDone ? 'line-through text-muted-foreground opacity-60' : 'text-gray-800',
+  );
+
+  const btnSave   = 'flex-shrink-0 rounded p-1 text-green-600 hover:bg-green-50';
+  const btnCancel = 'flex-shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100';
+
+  return (
+    <div>
+      {/* ── Linha do nó ──────────────────────────────────────── */}
+      <div className={cn('group flex items-start gap-2 min-w-0', depth === 0 ? 'py-2' : 'py-1')}>
+
+        {/* Bolinha de conclusão */}
+        <button
+          type="button"
+          onClick={() => onToggle(path)}
+          disabled={!canEdit || isPending}
+          title={hasChildren ? 'Alterna todos os filhos' : undefined}
+          className={cn(
+            'mt-0.5 flex-shrink-0 transition-opacity',
+            (!canEdit || isPending) ? 'cursor-default' : 'cursor-pointer hover:opacity-70',
+          )}
+        >
+          {effectiveDone
+            ? <CheckCircle2 className={cn(iconCls, 'text-green-500')} />
+            : <Circle       className={cn(iconCls, 'text-gray-300')}  />}
+        </button>
+
+        {/* Input não-controlado (só durante edição) */}
+        {isEditing ? (
+          <>
+            <input
+              ref={editInputRef}
+              defaultValue={node.label}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter')  { e.preventDefault(); onCommitEdit(); }
+                if (e.key === 'Escape') onCancelEdit();
+              }}
+              className={cn(
+                'flex-1 min-w-0 rounded border border-blue-300 bg-blue-50 px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-400',
+                depth === 0 ? 'text-base' : 'text-sm',
+              )}
+            />
+            <button type="button" onClick={onCommitEdit} title="Salvar (Enter)" className={btnSave}>
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button type="button" onClick={onCancelEdit} title="Cancelar (Esc)" className={btnCancel}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : (
+          <>
+            <span className={labelCls}>
+              {node.label || <span className="italic text-muted-foreground">vazio</span>}
+            </span>
+
+            {/* Badge [n/m] — apenas em nós com filhos */}
+            {hasChildren && (
+              <span className={cn(
+                'flex-shrink-0 rounded-full bg-gray-100 px-2 py-0.5 font-mono tabular-nums text-muted-foreground',
+                depth === 0 ? 'text-sm' : 'text-xs',
+                childDone > 0 && childDone === childTotal && 'bg-green-100 text-green-700',
+              )}>
+                {childDone}/{childTotal}
+              </span>
+            )}
+
+            {/* Botões de ação — aparecem ao hover */}
+            {canEdit && !isConfirm && (
+              <div className="flex flex-shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                <button
+                  type="button"
+                  onClick={() => onStartEdit(path)}
+                  title="Editar"
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                >
+                  <Pencil className={depth === 0 ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onAddChild(path)}
+                  title="Adicionar subtarefa"
+                  className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                >
+                  <Plus className={depth === 0 ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRequestDelete(path)}
+                  title="Excluir"
+                  className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                >
+                  <Trash2 className={depth === 0 ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Confirmação de exclusão inline */}
+      {isConfirm && (
+        <div className="ml-8 mt-0.5 mb-1.5 flex items-center gap-2 rounded-md bg-red-50 px-3 py-1.5 text-xs text-red-700">
+          <span className="flex-1">
+            Excluir {hasChildren ? 'este item e todos os seus filhos' : 'este item'}?
+          </span>
+          <button
+            type="button"
+            onClick={onConfirmDelete}
+            className="flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700"
+          >
+            <Check className="h-3 w-3" /> Sim
+          </button>
+          <button
+            type="button"
+            onClick={onCancelDelete}
+            className="flex items-center gap-1 rounded border border-red-200 px-2 py-0.5 hover:bg-red-100"
+          >
+            <X className="h-3 w-3" /> Não
+          </button>
+        </div>
+      )}
+
+      {/* Filhos — renderização recursiva */}
+      {hasChildren && (
+        <div className="ml-7 border-l border-gray-200 pl-2.5">
+          {node.children!.map((child, childIdx) => (
+            <ChecklistNodeItem
+              key={childIdx}
+              node={child}
+              path={[...path, childIdx]}
+              editingTarget={editingTarget}
+              confirmPath={confirmPath}
+              editInputRef={editInputRef}
+              onToggle={onToggle}
+              onStartEdit={onStartEdit}
+              onAddChild={onAddChild}
+              onRequestDelete={onRequestDelete}
+              onCommitEdit={onCommitEdit}
+              onCancelEdit={onCancelEdit}
+              onConfirmDelete={onConfirmDelete}
+              onCancelDelete={onCancelDelete}
+              canEdit={canEdit}
+              isPending={isPending}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 
 interface Props {
   progressJson: unknown;
-  etapa: string;
-  onSave?: (items: ChecklistItem[]) => void;
-  isPending?: boolean;
+  etapa:        string;
+  onSave?:      (items: ChecklistNode[]) => void;
+  isPending?:   boolean;
 }
 
 export function ImplantacaoChecklist({ progressJson, etapa, onSave, isPending }: Props) {
-  const [items, setItems]                       = useState<ChecklistItem[]>(() => parseChecklist(progressJson) ?? []);
-  const [editingTarget, setEditingTarget]       = useState<EditingTarget | null>(null);
-  const [confirm,       setConfirm]             = useState<ConfirmState | null>(null);
-  const editInputRef                            = useRef<HTMLInputElement>(null);
+  const [items, setItems]                 = useState<ChecklistNode[]>(() => parseChecklist(progressJson) ?? []);
+  const [editingTarget, setEditingTarget] = useState<EditingTarget | null>(null);
+  const [confirmPath,   setConfirmPath]   = useState<number[] | null>(null);
+  const editInputRef                      = useRef<HTMLInputElement>(null);
 
-  // Foca o campo UMA ÚNICA VEZ ao entrar em edição.
-  // O input é não-controlado, então este efeito NÃO RODA durante a digitação
-  // (editingTarget não muda enquanto o usuário digita).
-  // Sem select() — cursor aparece no final do texto.
+  // Foca no input ao entrar em modo de edição.
+  // Input não-controlado → editingTarget nunca muda durante a digitação
+  // → este efeito não roda durante a digitação.
   useEffect(() => {
     if (editingTarget !== null && editInputRef.current) {
-      // Posiciona o cursor no final do texto existente
-      const el = editInputRef.current;
+      const el  = editInputRef.current;
       el.focus();
       const len = el.value.length;
       el.setSelectionRange(len, len);
     }
   }, [editingTarget]);
 
-  const canEdit      = !!onSave;
+  const canEdit = !!onSave;
+
+  const { total, done } = countLeaves(items);
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   const defaultCount = DEFAULT_CHECKLIST[etapa]?.length ?? 0;
-  const total        = items.length;
-  const concluidos   = items.filter(isItemConcluido).length;
-  const pct          = total > 0 ? Math.round((concluidos / total) * 100) : 0;
 
-  // ── Persistência ─────────────────────────────────────────────────────────
-
-  const applyAndSave = (next: ChecklistItem[]) => {
+  const applyAndSave = (next: ChecklistNode[]) => {
     setItems(next);
     onSave?.(next);
   };
 
-  // ── Toggle item principal (só sem subtarefas) ─────────────────────────────
+  // ── Toggle ────────────────────────────────────────────────────────────────
 
-  const toggleItem = (idx: number) => {
+  const handleToggle = (path: number[]) => {
     if (!canEdit || isPending) return;
-    if ((items[idx].subtasks?.length ?? 0) > 0) return;
-    applyAndSave(
-      items.map((it, i) => (i === idx ? { ...it, concluido: !it.concluido } : it)),
-    );
+    const node    = getAtPath(items, path);
+    const newDone = !isNodeDone(node);
+    applyAndSave(updateAtPath(items, path, n => cascadeDown(n, newDone)));
   };
 
-  // ── Toggle subtarefa ──────────────────────────────────────────────────────
+  // ── Edição ────────────────────────────────────────────────────────────────
 
-  const toggleSubtask = (itemIdx: number, subIdx: number) => {
-    if (!canEdit || isPending) return;
-    const next = items.map((it, i) => {
-      if (i !== itemIdx) return it;
-      const subs = (it.subtasks ?? []).map((s, j) =>
-        j === subIdx ? { ...s, concluido: !s.concluido } : s,
-      );
-      return { ...it, subtasks: subs, concluido: subs.every((s) => s.concluido) };
-    });
-    applyAndSave(next);
+  const handleStartEdit = (path: number[]) => {
+    setConfirmPath(null);
+    setEditingTarget({ path });
   };
 
-  // ── Iniciar edição ────────────────────────────────────────────────────────
-
-  const startEditItem = (idx: number) => {
-    setConfirm(null);
-    setEditingTarget({ type: 'item', itemIdx: idx });
-  };
-
-  const startEditSubtask = (itemIdx: number, subIdx: number) => {
-    setConfirm(null);
-    setEditingTarget({ type: 'subtask', itemIdx, subtaskIdx: subIdx });
-  };
-
-  // ── Cancelar edição ───────────────────────────────────────────────────────
-
-  const cancelEdit = () => {
-    // Se a subtarefa foi recém-criada e o usuário cancelou, remover o placeholder vazio
-    if (editingTarget?.type === 'subtask' && editingTarget.isNew) {
-      const { itemIdx, subtaskIdx } = editingTarget;
-      setItems((prev) =>
-        prev.map((it, i) => {
-          if (i !== itemIdx) return it;
-          const subs = (it.subtasks ?? []).filter((_, j) => j !== subtaskIdx);
-          return subs.length === 0
-            ? { label: it.label, concluido: false }
-            : { ...it, subtasks: subs };
-        }),
-      );
+  const handleCancelEdit = () => {
+    if (editingTarget?.isNew) {
+      const { path } = editingTarget;
+      setItems(prev => removeAtPath(prev, path));
     }
     setEditingTarget(null);
   };
 
-  // ── Confirmar edição (Enter ou botão ✅) ─────────────────────────────────
-  // Lê o valor diretamente do DOM — nenhuma re-renderização durante a digitação.
-
-  const commitEdit = () => {
+  const handleCommitEdit = () => {
     if (!editingTarget || !editInputRef.current) return;
     const trimmed = editInputRef.current.value.trim();
-    if (!trimmed) { cancelEdit(); return; }
-
-    let next: ChecklistItem[];
-    if (editingTarget.type === 'item') {
-      next = items.map((it, i) =>
-        i === editingTarget.itemIdx ? { ...it, label: trimmed } : it,
-      );
-    } else {
-      next = items.map((it, i) => {
-        if (i !== editingTarget.itemIdx) return it;
-        const subs = (it.subtasks ?? []).map((s, j) =>
-          j === editingTarget.subtaskIdx ? { ...s, label: trimmed } : s,
-        );
-        return { ...it, subtasks: subs };
-      });
-    }
+    if (!trimmed) { handleCancelEdit(); return; }
+    const newItems = updateAtPath(items, editingTarget.path, n => ({ ...n, label: trimmed }));
     setEditingTarget(null);
-    applyAndSave(next);
+    applyAndSave(newItems);
   };
 
-  // ── Adicionar subtarefa ───────────────────────────────────────────────────
+  // ── Adicionar filho em qualquer nível ─────────────────────────────────────
 
-  const addSubtask = (itemIdx: number) => {
+  const handleAddChild = (parentPath: number[]) => {
     if (!canEdit || isPending) return;
-    const currentSubs = items[itemIdx].subtasks ?? [];
-    const newSubIdx   = currentSubs.length;
-    // Adiciona ao estado local com label vazio — NÃO chama onSave ainda.
-    // Se o usuário cancelar, cancelEdit() remove este item.
-    const next = items.map((it, i) =>
-      i === itemIdx
-        ? { ...it, subtasks: [...currentSubs, { label: '', concluido: false }] }
-        : it,
-    );
-    setItems(next);
-    setEditingTarget({ type: 'subtask', itemIdx, subtaskIdx: newSubIdx, isNew: true });
+    const parent      = getAtPath(items, parentPath);
+    const newChildIdx = (parent.children?.length ?? 0);
+    const newItems    = updateAtPath(items, parentPath, n => ({
+      ...n,
+      children: [...(n.children ?? []), { label: '', concluido: false }],
+    }));
+    setItems(newItems);
+    setEditingTarget({ path: [...parentPath, newChildIdx], isNew: true });
   };
 
-  // ── Excluir item ──────────────────────────────────────────────────────────
+  const handleAddRoot = () => {
+    if (!canEdit || isPending) return;
+    const newIdx = items.length;
+    setItems(prev => [...prev, { label: '', concluido: false }]);
+    setEditingTarget({ path: [newIdx], isNew: true });
+  };
 
-  const requestDeleteItem = (idx: number) => {
+  // ── Exclusão ──────────────────────────────────────────────────────────────
+
+  const handleRequestDelete = (path: number[]) => {
     setEditingTarget(null);
-    setConfirm({ type: 'item', itemIdx: idx });
+    setConfirmPath(path);
   };
 
-  const doDeleteItem = () => {
-    if (!confirm || confirm.type !== 'item') return;
-    applyAndSave(items.filter((_, i) => i !== confirm.itemIdx));
-    setConfirm(null);
+  const handleConfirmDelete = () => {
+    if (!confirmPath) return;
+    applyAndSave(removeAtPath(items, confirmPath));
+    setConfirmPath(null);
   };
 
-  // ── Excluir subtarefa ─────────────────────────────────────────────────────
+  const handleCancelDelete = () => setConfirmPath(null);
 
-  const requestDeleteSubtask = (itemIdx: number, subIdx: number) => {
-    setEditingTarget(null);
-    setConfirm({ type: 'subtask', itemIdx, subtaskIdx: subIdx });
-  };
+  // ── Props compartilhadas para o componente recursivo ─────────────────────
 
-  const doDeleteSubtask = () => {
-    if (!confirm || confirm.type !== 'subtask') return;
-    const { itemIdx, subtaskIdx } = confirm;
-    const next = items.map((it, i) => {
-      if (i !== itemIdx) return it;
-      const subs = (it.subtasks ?? []).filter((_, j) => j !== subtaskIdx);
-      return subs.length === 0
-        ? { label: it.label, concluido: false }
-        : { ...it, subtasks: subs };
-    });
-    applyAndSave(next);
-    setConfirm(null);
-  };
-
-  // ── Estilos dos botões de edição inline ──────────────────────────────────
-
-  const btnSave   = 'flex-shrink-0 rounded p-1 text-green-600 hover:bg-green-50 disabled:opacity-40';
-  const btnCancel = 'flex-shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100';
+  const sharedProps = {
+    editingTarget,
+    confirmPath,
+    editInputRef,
+    onToggle:        handleToggle,
+    onStartEdit:     handleStartEdit,
+    onAddChild:      handleAddChild,
+    onRequestDelete: handleRequestDelete,
+    onCommitEdit:    handleCommitEdit,
+    onCancelEdit:    handleCancelEdit,
+    onConfirmDelete: handleConfirmDelete,
+    onCancelDelete:  handleCancelDelete,
+    canEdit,
+    isPending: !!isPending,
+  } as const;
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -308,23 +497,21 @@ export function ImplantacaoChecklist({ progressJson, etapa, onSave, isPending }:
           <span className="text-sm font-semibold text-gray-800">Checklist Operacional</span>
         </div>
         {total > 0 ? (
-          <span className="text-xs text-muted-foreground">
-            {concluidos}/{total} concluído{total !== 1 ? 's' : ''}
+          <span className="text-sm text-muted-foreground">
+            {done}/{total} tarefa{total !== 1 ? 's' : ''} concluída{done !== 1 ? 's' : ''}
           </span>
         ) : defaultCount > 0 ? (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {defaultCount} item{defaultCount !== 1 ? 's' : ''} previstos
           </span>
         ) : null}
       </div>
 
       {/* Estado vazio */}
-      {total === 0 ? (
+      {items.length === 0 ? (
         <div className="px-4 py-5 text-center">
           <ClipboardList className="mx-auto mb-2 h-8 w-8 text-gray-200" />
-          <p className="text-sm text-muted-foreground">
-            Nenhum checklist cadastrado para esta implantação.
-          </p>
+          <p className="text-sm text-muted-foreground">Nenhum checklist cadastrado.</p>
           {defaultCount > 0 && (
             <p className="mt-1 text-xs text-muted-foreground/70">
               Esta etapa possui {defaultCount} item{defaultCount !== 1 ? 's' : ''} sugeridos.
@@ -344,240 +531,36 @@ export function ImplantacaoChecklist({ progressJson, etapa, onSave, isPending }:
                 style={{ width: `${pct}%` }}
               />
             </div>
-            <p className="mt-1 text-right text-[11px] text-muted-foreground">{pct}% concluído</p>
+            <p className="mt-1 text-right text-xs text-muted-foreground">{pct}% concluído</p>
           </div>
 
-          {/* Lista */}
-          <div className="divide-y px-4 pb-2">
-            {items.map((item, idx) => {
-              const hasSubs       = (item.subtasks?.length ?? 0) > 0;
-              const subTotal      = item.subtasks?.length ?? 0;
-              const subDone       = item.subtasks?.filter((s) => s.concluido).length ?? 0;
-              const itemDone      = isItemConcluido(item);
-              const isEditingItem = !!editingTarget && editingTarget.type === 'item' && editingTarget.itemIdx === idx;
-              const isConfirmItem = !!confirm && confirm.type === 'item' && confirm.itemIdx === idx;
-
-              return (
-                <div key={`item-${idx}`} className="py-2">
-
-                  {/* ── Item principal ───────────────────────────────────── */}
-                  <div className="group flex items-center gap-2 min-w-0">
-
-                    {/* Bolinha de conclusão */}
-                    <button
-                      type="button"
-                      onClick={() => toggleItem(idx)}
-                      disabled={hasSubs || !canEdit || isPending}
-                      title={hasSubs ? 'Conclua as subtarefas para completar este item' : undefined}
-                      className={cn(
-                        'flex-shrink-0 transition-opacity',
-                        hasSubs || !canEdit ? 'cursor-default opacity-40' : 'cursor-pointer hover:opacity-70',
-                        isPending && 'cursor-wait',
-                      )}
-                    >
-                      {itemDone
-                        ? <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        : <Circle       className="h-4 w-4 text-gray-300"  />}
-                    </button>
-
-                    {/* Label / input não-controlado */}
-                    {isEditingItem ? (
-                      <>
-                        <input
-                          ref={editInputRef}
-                          defaultValue={item.label}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter')  { e.preventDefault(); commitEdit(); }
-                            if (e.key === 'Escape') cancelEdit();
-                          }}
-                          className="flex-1 min-w-0 rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-sm outline-none focus:ring-1 focus:ring-blue-400"
-                        />
-                        <button type="button" onClick={commitEdit} title="Salvar (Enter)" className={btnSave}>
-                          <Check className="h-3.5 w-3.5" />
-                        </button>
-                        <button type="button" onClick={cancelEdit} title="Cancelar (Esc)" className={btnCancel}>
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </>
-                    ) : (
-                      <span
-                        className={cn(
-                          'flex-1 min-w-0 text-sm leading-snug truncate',
-                          itemDone ? 'line-through text-muted-foreground opacity-60' : 'text-gray-800',
-                        )}
-                      >
-                        {item.label}
-                        {hasSubs && (
-                          <span className="ml-2 text-[10px] font-normal text-muted-foreground">
-                            {subDone}/{subTotal} subtarefa{subTotal !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </span>
-                    )}
-
-                    {/* Botões de ação (aparecem no hover) */}
-                    {!isEditingItem && canEdit && !isConfirmItem && (
-                      <div className="flex flex-shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button
-                          type="button"
-                          onClick={() => startEditItem(idx)}
-                          title="Editar"
-                          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => addSubtask(idx)}
-                          title="Adicionar subtarefa"
-                          className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => requestDeleteItem(idx)}
-                          title="Excluir item"
-                          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Confirmação de exclusão do item */}
-                  {isConfirmItem && (
-                    <div className="mt-1.5 flex items-center gap-2 rounded-md bg-red-50 px-3 py-1.5 text-xs text-red-700">
-                      <span className="flex-1">Excluir este item{hasSubs ? ' e suas subtarefas' : ''}?</span>
-                      <button
-                        type="button"
-                        onClick={doDeleteItem}
-                        className="flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700"
-                      >
-                        <Check className="h-3 w-3" /> Sim
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirm(null)}
-                        className="flex items-center gap-1 rounded border border-red-200 px-2 py-0.5 hover:bg-red-100"
-                      >
-                        <X className="h-3 w-3" /> Não
-                      </button>
-                    </div>
-                  )}
-
-                  {/* ── Subtarefas ────────────────────────────────────────── */}
-                  {hasSubs && (
-                    <div className="ml-6 mt-1 space-y-0.5">
-                      {item.subtasks!.map((sub, subIdx) => {
-                        const isEditingSub = !!editingTarget && editingTarget.type === 'subtask' && editingTarget.itemIdx === idx && editingTarget.subtaskIdx === subIdx;
-                        const isConfirmSub = !!confirm && confirm.type === 'subtask' && confirm.itemIdx === idx && confirm.subtaskIdx === subIdx;
-
-                        return (
-                          <div key={`sub-${idx}-${subIdx}`}>
-                            <div className="group flex items-center gap-2 min-w-0 py-0.5">
-
-                              {/* Bolinha da subtarefa */}
-                              <button
-                                type="button"
-                                onClick={() => toggleSubtask(idx, subIdx)}
-                                disabled={!canEdit || isPending}
-                                className={cn(
-                                  'flex-shrink-0 transition-opacity hover:opacity-70',
-                                  (!canEdit || isPending) && 'cursor-default',
-                                )}
-                              >
-                                {sub.concluido
-                                  ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                                  : <Circle       className="h-3.5 w-3.5 text-gray-300"  />}
-                              </button>
-
-                              {/* Label / input não-controlado da subtarefa */}
-                              {isEditingSub ? (
-                                <>
-                                  <input
-                                    ref={editInputRef}
-                                    defaultValue={sub.label}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter')  { e.preventDefault(); commitEdit(); }
-                                      if (e.key === 'Escape') cancelEdit();
-                                    }}
-                                    className="flex-1 min-w-0 rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-xs outline-none focus:ring-1 focus:ring-blue-400"
-                                  />
-                                  <button type="button" onClick={commitEdit} title="Salvar (Enter)" className={btnSave}>
-                                    <Check className="h-3 w-3" />
-                                  </button>
-                                  <button type="button" onClick={cancelEdit} title="Cancelar (Esc)" className={btnCancel}>
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </>
-                              ) : (
-                                <span
-                                  className={cn(
-                                    'flex-1 min-w-0 text-xs leading-snug',
-                                    sub.concluido
-                                      ? 'line-through text-muted-foreground opacity-60'
-                                      : 'text-gray-700',
-                                  )}
-                                >
-                                  {sub.label || <span className="italic text-muted-foreground">vazio</span>}
-                                </span>
-                              )}
-
-                              {/* Ações da subtarefa */}
-                              {!isEditingSub && canEdit && !isConfirmSub && (
-                                <div className="flex flex-shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                                  <button
-                                    type="button"
-                                    onClick={() => startEditSubtask(idx, subIdx)}
-                                    title="Editar subtarefa"
-                                    className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                                  >
-                                    <Pencil className="h-3 w-3" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => requestDeleteSubtask(idx, subIdx)}
-                                    title="Excluir subtarefa"
-                                    className="rounded p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Confirmação de exclusão da subtarefa */}
-                            {isConfirmSub && (
-                              <div className="mt-1 flex items-center gap-2 rounded-md bg-red-50 px-3 py-1 text-xs text-red-700">
-                                <span className="flex-1">Excluir esta subtarefa?</span>
-                                <button
-                                  type="button"
-                                  onClick={doDeleteSubtask}
-                                  className="flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-white hover:bg-red-700"
-                                >
-                                  <Check className="h-3 w-3" /> Sim
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirm(null)}
-                                  className="flex items-center gap-1 rounded border border-red-200 px-2 py-0.5 hover:bg-red-100"
-                                >
-                                  <X className="h-3 w-3" /> Não
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          {/* Árvore de itens */}
+          <div className="px-4 pb-3">
+            {items.map((item, idx) => (
+              <ChecklistNodeItem
+                key={idx}
+                node={item}
+                path={[idx]}
+                {...sharedProps}
+              />
+            ))}
           </div>
         </>
+      )}
+
+      {/* Botão adicionar item raiz */}
+      {canEdit && (
+        <div className="border-t px-4 py-2">
+          <button
+            type="button"
+            onClick={handleAddRoot}
+            disabled={!!isPending}
+            className="flex items-center gap-1.5 rounded px-2 py-1 text-sm text-muted-foreground hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Adicionar item
+          </button>
+        </div>
       )}
     </div>
   );
