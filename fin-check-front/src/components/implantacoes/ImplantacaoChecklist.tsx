@@ -73,7 +73,7 @@ function parseChecklist(progressJson: unknown): ChecklistItem[] | null {
 
     if (!Array.isArray(arr)) return null;
 
-    const items = arr
+    const parsed = arr
       .filter(
         (item): item is Record<string, unknown> =>
           item !== null &&
@@ -97,21 +97,21 @@ function parseChecklist(progressJson: unknown): ChecklistItem[] | null {
         };
       });
 
-    return items.length > 0 ? items : null;
+    return parsed.length > 0 ? parsed : null;
   } catch {
     return null;
   }
 }
 
 // ─── Estado de edição ─────────────────────────────────────────────────────────
-// editingTarget: identifica QUAL item/subtarefa está em edição (estável entre keystrokes)
-// draftText: o texto digitado no momento (muda a cada tecla)
-// Manter separados garante que o useEffect de focus/select só dispare ao INICIAR a edição,
-// não a cada letra digitada.
+// O input é NÃO-CONTROLADO (defaultValue, sem value/onChange).
+// Isso garante ZERO re-renders durante a digitação — o DOM gerencia o valor sozinho.
+// editingTarget identifica qual item/subtarefa está em edição.
+// isNew = true marca subtarefas recém-criadas (label vazio) para remoção ao cancelar.
 
 type EditingTarget =
   | { type: 'item';    itemIdx: number }
-  | { type: 'subtask'; itemIdx: number; subtaskIdx: number };
+  | { type: 'subtask'; itemIdx: number; subtaskIdx: number; isNew?: boolean };
 
 type ConfirmState =
   | { type: 'item';    itemIdx: number }
@@ -127,18 +127,22 @@ interface Props {
 }
 
 export function ImplantacaoChecklist({ progressJson, etapa, onSave, isPending }: Props) {
-  const [items, setItems]           = useState<ChecklistItem[]>(() => parseChecklist(progressJson) ?? []);
-  const [editingTarget, setEditingTarget] = useState<EditingTarget | null>(null);
-  const [draftText,     setDraftText]     = useState('');
-  const [confirm,       setConfirm]       = useState<ConfirmState | null>(null);
-  const editInputRef                      = useRef<HTMLInputElement>(null);
+  const [items, setItems]                       = useState<ChecklistItem[]>(() => parseChecklist(progressJson) ?? []);
+  const [editingTarget, setEditingTarget]       = useState<EditingTarget | null>(null);
+  const [confirm,       setConfirm]             = useState<ConfirmState | null>(null);
+  const editInputRef                            = useRef<HTMLInputElement>(null);
 
-  // Focus + select apenas ao INICIAR a edição (quando editingTarget muda).
-  // Não depende de draftText, então não dispara a cada keystroke.
+  // Foca o campo UMA ÚNICA VEZ ao entrar em edição.
+  // O input é não-controlado, então este efeito NÃO RODA durante a digitação
+  // (editingTarget não muda enquanto o usuário digita).
+  // Sem select() — cursor aparece no final do texto.
   useEffect(() => {
-    if (editingTarget !== null) {
-      editInputRef.current?.focus();
-      editInputRef.current?.select();
+    if (editingTarget !== null && editInputRef.current) {
+      // Posiciona o cursor no final do texto existente
+      const el = editInputRef.current;
+      el.focus();
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
     }
   }, [editingTarget]);
 
@@ -183,28 +187,39 @@ export function ImplantacaoChecklist({ progressJson, etapa, onSave, isPending }:
 
   const startEditItem = (idx: number) => {
     setConfirm(null);
-    setDraftText(items[idx].label);
     setEditingTarget({ type: 'item', itemIdx: idx });
   };
 
   const startEditSubtask = (itemIdx: number, subIdx: number) => {
     setConfirm(null);
-    setDraftText(items[itemIdx].subtasks![subIdx].label);
     setEditingTarget({ type: 'subtask', itemIdx, subtaskIdx: subIdx });
   };
 
   // ── Cancelar edição ───────────────────────────────────────────────────────
 
   const cancelEdit = () => {
+    // Se a subtarefa foi recém-criada e o usuário cancelou, remover o placeholder vazio
+    if (editingTarget?.type === 'subtask' && editingTarget.isNew) {
+      const { itemIdx, subtaskIdx } = editingTarget;
+      setItems((prev) =>
+        prev.map((it, i) => {
+          if (i !== itemIdx) return it;
+          const subs = (it.subtasks ?? []).filter((_, j) => j !== subtaskIdx);
+          return subs.length === 0
+            ? { label: it.label, concluido: false }
+            : { ...it, subtasks: subs };
+        }),
+      );
+    }
     setEditingTarget(null);
-    setDraftText('');
   };
 
-  // ── Confirmar edição (Enter ou blur) ─────────────────────────────────────
+  // ── Confirmar edição (Enter ou botão ✅) ─────────────────────────────────
+  // Lê o valor diretamente do DOM — nenhuma re-renderização durante a digitação.
 
   const commitEdit = () => {
-    if (!editingTarget) return;
-    const trimmed = draftText.trim();
+    if (!editingTarget || !editInputRef.current) return;
+    const trimmed = editInputRef.current.value.trim();
     if (!trimmed) { cancelEdit(); return; }
 
     let next: ChecklistItem[];
@@ -221,7 +236,7 @@ export function ImplantacaoChecklist({ progressJson, etapa, onSave, isPending }:
         return { ...it, subtasks: subs };
       });
     }
-    cancelEdit();
+    setEditingTarget(null);
     applyAndSave(next);
   };
 
@@ -231,21 +246,21 @@ export function ImplantacaoChecklist({ progressJson, etapa, onSave, isPending }:
     if (!canEdit || isPending) return;
     const currentSubs = items[itemIdx].subtasks ?? [];
     const newSubIdx   = currentSubs.length;
-    const placeholder = 'Nova subtarefa';
-    const newSub: Subtask = { label: placeholder, concluido: false };
+    // Adiciona ao estado local com label vazio — NÃO chama onSave ainda.
+    // Se o usuário cancelar, cancelEdit() remove este item.
     const next = items.map((it, i) =>
-      i === itemIdx ? { ...it, subtasks: [...currentSubs, newSub] } : it,
+      i === itemIdx
+        ? { ...it, subtasks: [...currentSubs, { label: '', concluido: false }] }
+        : it,
     );
     setItems(next);
-    // Não chama onSave ainda — o usuário vai editar o label antes de confirmar
-    setDraftText(placeholder);
-    setEditingTarget({ type: 'subtask', itemIdx, subtaskIdx: newSubIdx });
+    setEditingTarget({ type: 'subtask', itemIdx, subtaskIdx: newSubIdx, isNew: true });
   };
 
   // ── Excluir item ──────────────────────────────────────────────────────────
 
   const requestDeleteItem = (idx: number) => {
-    cancelEdit();
+    setEditingTarget(null);
     setConfirm({ type: 'item', itemIdx: idx });
   };
 
@@ -258,7 +273,7 @@ export function ImplantacaoChecklist({ progressJson, etapa, onSave, isPending }:
   // ── Excluir subtarefa ─────────────────────────────────────────────────────
 
   const requestDeleteSubtask = (itemIdx: number, subIdx: number) => {
-    cancelEdit();
+    setEditingTarget(null);
     setConfirm({ type: 'subtask', itemIdx, subtaskIdx: subIdx });
   };
 
@@ -268,12 +283,18 @@ export function ImplantacaoChecklist({ progressJson, etapa, onSave, isPending }:
     const next = items.map((it, i) => {
       if (i !== itemIdx) return it;
       const subs = (it.subtasks ?? []).filter((_, j) => j !== subtaskIdx);
-      if (subs.length === 0) return { label: it.label, concluido: false };
-      return { ...it, subtasks: subs };
+      return subs.length === 0
+        ? { label: it.label, concluido: false }
+        : { ...it, subtasks: subs };
     });
     applyAndSave(next);
     setConfirm(null);
   };
+
+  // ── Estilos dos botões de edição inline ──────────────────────────────────
+
+  const btnSave   = 'flex-shrink-0 rounded p-1 text-green-600 hover:bg-green-50 disabled:opacity-40';
+  const btnCancel = 'flex-shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100';
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -359,19 +380,25 @@ export function ImplantacaoChecklist({ progressJson, etapa, onSave, isPending }:
                         : <Circle       className="h-4 w-4 text-gray-300"  />}
                     </button>
 
-                    {/* Label / input */}
+                    {/* Label / input não-controlado */}
                     {isEditingItem ? (
-                      <input
-                        ref={editInputRef}
-                        className="flex-1 min-w-0 rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-sm outline-none focus:ring-1 focus:ring-blue-400"
-                        value={draftText}
-                        onChange={(e) => setDraftText(e.target.value)}
-                        onBlur={commitEdit}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter')  commitEdit();
-                          if (e.key === 'Escape') cancelEdit();
-                        }}
-                      />
+                      <>
+                        <input
+                          ref={editInputRef}
+                          defaultValue={item.label}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter')  { e.preventDefault(); commitEdit(); }
+                            if (e.key === 'Escape') cancelEdit();
+                          }}
+                          className="flex-1 min-w-0 rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-sm outline-none focus:ring-1 focus:ring-blue-400"
+                        />
+                        <button type="button" onClick={commitEdit} title="Salvar (Enter)" className={btnSave}>
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                        <button type="button" onClick={cancelEdit} title="Cancelar (Esc)" className={btnCancel}>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </>
                     ) : (
                       <span
                         className={cn(
@@ -466,19 +493,25 @@ export function ImplantacaoChecklist({ progressJson, etapa, onSave, isPending }:
                                   : <Circle       className="h-3.5 w-3.5 text-gray-300"  />}
                               </button>
 
-                              {/* Label / input da subtarefa */}
+                              {/* Label / input não-controlado da subtarefa */}
                               {isEditingSub ? (
-                                <input
-                                  ref={editInputRef}
-                                  className="flex-1 min-w-0 rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-xs outline-none focus:ring-1 focus:ring-blue-400"
-                                  value={draftText}
-                                  onChange={(e) => setDraftText(e.target.value)}
-                                  onBlur={commitEdit}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter')  commitEdit();
-                                    if (e.key === 'Escape') cancelEdit();
-                                  }}
-                                />
+                                <>
+                                  <input
+                                    ref={editInputRef}
+                                    defaultValue={sub.label}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter')  { e.preventDefault(); commitEdit(); }
+                                      if (e.key === 'Escape') cancelEdit();
+                                    }}
+                                    className="flex-1 min-w-0 rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-xs outline-none focus:ring-1 focus:ring-blue-400"
+                                  />
+                                  <button type="button" onClick={commitEdit} title="Salvar (Enter)" className={btnSave}>
+                                    <Check className="h-3 w-3" />
+                                  </button>
+                                  <button type="button" onClick={cancelEdit} title="Cancelar (Esc)" className={btnCancel}>
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </>
                               ) : (
                                 <span
                                   className={cn(
@@ -488,7 +521,7 @@ export function ImplantacaoChecklist({ progressJson, etapa, onSave, isPending }:
                                       : 'text-gray-700',
                                   )}
                                 >
-                                  {sub.label}
+                                  {sub.label || <span className="italic text-muted-foreground">vazio</span>}
                                 </span>
                               )}
 
