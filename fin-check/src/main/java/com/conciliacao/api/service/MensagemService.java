@@ -312,7 +312,8 @@ public class MensagemService {
         valores.put("totalRecebido",   formatarValor(recebimentos.totalRecebido()));
         valores.put("totalDescontado", formatarValor(recebimentos.totalDescontado()));
         // ── novas variáveis ────────────────────────────────────────────────
-        valores.put("cliente",               razaoSocial);
+        valores.put("cliente",               nomeFantasia != null && !nomeFantasia.isBlank() ? nomeFantasia : razaoSocial);
+        valores.put("razaoSocial",           razaoSocial);
         valores.put("telefone",              cliente.getWhatsapp());
         valores.put("data",                  req.dataFim().format(FMT));
         valores.put("templateName",          template.getNome());
