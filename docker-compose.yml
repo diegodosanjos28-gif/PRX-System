@@ -30,6 +30,7 @@ services:
     ports:
       - "8080:8080"
     environment:
+      TZ: America/Sao_Paulo
       DB_URL: jdbc:postgresql://postgres:5432/conciliacao
       DB_USERNAME: conciliacao
       DB_PASSWORD: conciliacao123
@@ -56,6 +57,7 @@ services:
       - "8081:8081"
     shm_size: '2gb'
     environment:
+      TZ: America/Sao_Paulo
       DB_URL: jdbc:postgresql://postgres:5432/conciliacao
       DB_USERNAME: conciliacao
       DB_PASSWORD: conciliacao123
@@ -77,6 +79,7 @@ services:
     ports:
       - "3000:3000"
     environment:
+      TZ: America/Sao_Paulo
       API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:8080}
       COLETOR_INTERNAL_URL: ${COLETOR_INTERNAL_URL:-http://coletor:8081}
 
