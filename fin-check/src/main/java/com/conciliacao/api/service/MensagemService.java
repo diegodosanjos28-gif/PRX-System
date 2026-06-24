@@ -30,6 +30,7 @@ import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -277,8 +278,10 @@ public class MensagemService {
         BigDecimal totalDebito     = somarPorModalidade(recs, "debit");
         BigDecimal totalVouchers   = somarPorModalidade(recs, "voucher");
         BigDecimal totalPix        = somarPorModalidade(recs, "pix");
-        BigDecimal mediaVendas     = recs.isEmpty() ? BigDecimal.ZERO
-            : totalValorBruto.divide(BigDecimal.valueOf(recs.size()), 2, RoundingMode.HALF_UP);
+        long diasPeriodo = ChronoUnit.DAYS.between(req.dataInicio(), req.dataFim()) + 1;
+        BigDecimal mediaVendas = diasPeriodo > 0
+            ? totalValorBruto.divide(BigDecimal.valueOf(diasPeriodo), 2, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO;
 
         BigDecimal totalTaxaPraticadaRS = coalesceZero(
             conciliacaoTaxaRepository.sumTaxaPraticadaRs(est.getId(), req.dataInicio(), req.dataFim())
