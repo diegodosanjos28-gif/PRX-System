@@ -11,6 +11,7 @@ import com.conciliacao.api.dto.response.RecebimentoPorBandeira;
 import com.conciliacao.api.dto.response.RecebimentoResponse;
 import com.conciliacao.api.dto.response.RecebimentoResumoResponse;
 import com.conciliacao.api.entity.Cliente;
+import com.conciliacao.api.entity.ConciliacaoTaxa;
 import com.conciliacao.api.entity.Estabelecimento;
 import com.conciliacao.api.entity.MensagemEnviada;
 import com.conciliacao.api.entity.Template;
@@ -27,14 +28,17 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.Normalizer;
+import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
 
 /**
  * Orquestra o ciclo de vida de uma mensagem: geração (via IA ou template) e envio via WhatsApp.
@@ -344,6 +348,30 @@ public class MensagemService {
         valores.put("totalDebitoVisa",     formatarValor(somarPorModalidadeEBandeira(recs, "debit", "visa")));
         valores.put("totalDebitoMaster",   formatarValor(somarPorModalidadeEBandeira(recs, "debit", "master")));
         valores.put("totalDebitoElo",      formatarValor(somarPorModalidadeEBandeira(recs, "debit", "elo")));
+
+        // Maior taxa praticada entre todos os estabelecimentos do cliente no período
+        List<ConciliacaoTaxa> topTaxa = conciliacaoTaxaRepository.findMaioresTaxasByCliente(
+            cliente.getId(), req.dataInicio(), req.dataFim(), PageRequest.of(0, 1));
+
+        String maiorTaxaFmt      = "-";
+        String operadoraMaisCara = "-";
+        if (!topTaxa.isEmpty()) {
+            ConciliacaoTaxa mt = topTaxa.get(0);
+            if (mt.getPercentualTaxa() != null) {
+                NumberFormat nf = NumberFormat.getNumberInstance(new Locale("pt", "BR"));
+                nf.setMinimumFractionDigits(2);
+                nf.setMaximumFractionDigits(2);
+                maiorTaxaFmt = nf.format(mt.getPercentualTaxa()) + "%";
+            }
+            String bandeira = mt.getBandeira();
+            if (bandeira != null && !bandeira.isBlank()) {
+                // Remove sufixo de código: "Alelo - 167" → "Alelo"
+                int sep = bandeira.indexOf(" - ");
+                operadoraMaisCara = sep > 0 ? bandeira.substring(0, sep).trim() : bandeira.trim();
+            }
+        }
+        valores.put("maiorTaxa",         maiorTaxaFmt);
+        valores.put("operadoraMaisCara", operadoraMaisCara);
 
         log.debug("Parâmetros do template calculados: {} chaves", valores.size());
 

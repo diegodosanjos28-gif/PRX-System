@@ -1,6 +1,7 @@
 package com.conciliacao.api.repository;
 
 import com.conciliacao.api.entity.ConciliacaoTaxa;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -121,6 +122,24 @@ public interface ConciliacaoTaxaRepository extends JpaRepository<ConciliacaoTaxa
         @Param("estabelecimentoId") UUID estabelecimentoId,
         @Param("dataInicio") LocalDate dataInicio,
         @Param("dataFim") LocalDate dataFim
+    );
+
+    /**
+     * Retorna os registros com maior percentualTaxa para todos os estabelecimentos
+     * do cliente no período. Usar com PageRequest.of(0, 1) para obter apenas o topo.
+     */
+    @Query("""
+        SELECT ct FROM ConciliacaoTaxa ct
+        WHERE ct.estabelecimento.cliente.id = :clienteId
+          AND ct.dataVenda BETWEEN :inicio AND :fim
+          AND ct.percentualTaxa IS NOT NULL
+        ORDER BY ct.percentualTaxa DESC
+        """)
+    List<ConciliacaoTaxa> findMaioresTaxasByCliente(
+        @Param("clienteId") UUID clienteId,
+        @Param("inicio") LocalDate inicio,
+        @Param("fim") LocalDate fim,
+        Pageable pageable
     );
 
 }
