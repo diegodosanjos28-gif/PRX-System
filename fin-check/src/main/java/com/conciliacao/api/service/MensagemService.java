@@ -303,6 +303,7 @@ public class MensagemService {
         String bandeiraMaisPassada = recebimentos.porBandeira().stream()
             .max(Comparator.comparingLong(RecebimentoPorBandeira::quantidade))
             .map(RecebimentoPorBandeira::bandeira)
+            .map(this::limparNomeOperadora)
             .orElse("-");
 
         // Chaves devem corresponder exatamente ao campo `chave` cadastrado em template_variaveis.
@@ -336,14 +337,14 @@ public class MensagemService {
         for (int i = 0; i < 4; i++) {
             String idx = String.valueOf(i + 1);
             if (i < operadorasOrdenadas.size()) {
-                valores.put("operadora" + idx + "Nome",  operadorasOrdenadas.get(i).getKey());
+                valores.put("operadora" + idx + "Nome",  limparNomeOperadora(operadorasOrdenadas.get(i).getKey()));
                 valores.put("operadora" + idx + "Total", formatarValor(operadorasOrdenadas.get(i).getValue()));
             } else {
                 valores.put("operadora" + idx + "Nome",  "-");
                 valores.put("operadora" + idx + "Total", "0,00");
             }
         }
-        valores.put("operadoraMaisUsada",  operadorasOrdenadas.isEmpty() ? "-" : operadorasOrdenadas.get(0).getKey());
+        valores.put("operadoraMaisUsada",  operadorasOrdenadas.isEmpty() ? "-" : limparNomeOperadora(operadorasOrdenadas.get(0).getKey()));
         valores.put("bandeiraMaisPassada", bandeiraMaisPassada);
         valores.put("totalCreditoVisa",    formatarValor(somarPorModalidadeEBandeira(recs, "credit", "visa")));
         valores.put("totalCreditoMaster",  formatarValor(somarPorModalidadeEBandeira(recs, "credit", "master")));
@@ -368,11 +369,7 @@ public class MensagemService {
             }
             String bandeira = mt.getBandeira();
             if (bandeira != null && !bandeira.isBlank()) {
-                // Remove sufixo de código: "Alelo - 167" → "Alelo"
-                int sep = bandeira.indexOf(" - ");
-                operadoraMaisCara = sep > 0 ? bandeira.substring(0, sep).trim() : bandeira.trim();
-                // Remove '%' que pode vir do dado bruto: "Pluxee | Sodexo%" → "Pluxee | Sodexo"
-                operadoraMaisCara = operadoraMaisCara.replace("%", "").trim();
+                operadoraMaisCara = limparNomeOperadora(bandeira);
             }
         }
         valores.put("maiorTaxa",         maiorTaxaFmt);
@@ -435,6 +432,14 @@ public class MensagemService {
         nf.setMinimumFractionDigits(2);
         nf.setMaximumFractionDigits(2);
         return nf.format(valor);
+    }
+
+    /** Remove sufixo de código " - NNN" e qualquer "%" do nome bruto de operadora/bandeira. */
+    private String limparNomeOperadora(String raw) {
+        if (raw == null || raw.isBlank()) return "-";
+        int sep = raw.indexOf(" - ");
+        String nome = sep > 0 ? raw.substring(0, sep) : raw;
+        return nome.replace("%", "").trim();
     }
 
     private static BigDecimal coalesceZero(BigDecimal val) {
