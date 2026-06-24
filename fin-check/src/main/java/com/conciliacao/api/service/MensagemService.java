@@ -365,7 +365,7 @@ public class MensagemService {
                 NumberFormat nf = NumberFormat.getNumberInstance(new Locale("pt", "BR"));
                 nf.setMinimumFractionDigits(2);
                 nf.setMaximumFractionDigits(2);
-                maiorTaxaFmt = nf.format(mt.getPercentualTaxa()) + "%";
+                maiorTaxaFmt = nf.format(mt.getPercentualTaxa());
             }
             String bandeira = mt.getBandeira();
             if (bandeira != null && !bandeira.isBlank()) {
