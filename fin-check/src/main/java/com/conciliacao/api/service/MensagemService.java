@@ -368,6 +368,8 @@ public class MensagemService {
                 // Remove sufixo de código: "Alelo - 167" → "Alelo"
                 int sep = bandeira.indexOf(" - ");
                 operadoraMaisCara = sep > 0 ? bandeira.substring(0, sep).trim() : bandeira.trim();
+                // Remove '%' que pode vir do dado bruto: "Pluxee | Sodexo%" → "Pluxee | Sodexo"
+                operadoraMaisCara = operadoraMaisCara.replace("%", "").trim();
             }
         }
         valores.put("maiorTaxa",         maiorTaxaFmt);
@@ -426,7 +428,10 @@ public class MensagemService {
 
     private String formatarValor(BigDecimal valor) {
         if (valor == null) return "0,00";
-        return String.format("%.2f", valor).replace(".", ",");
+        NumberFormat nf = NumberFormat.getNumberInstance(new Locale("pt", "BR"));
+        nf.setMinimumFractionDigits(2);
+        nf.setMaximumFractionDigits(2);
+        return nf.format(valor);
     }
 
     private static BigDecimal coalesceZero(BigDecimal val) {
