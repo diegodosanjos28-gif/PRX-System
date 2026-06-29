@@ -5,6 +5,7 @@ export interface Cliente {
   cnpj: string;
   whatsapp: string;
   ativo: boolean;
+  relatorioDiarioAtivo: boolean;
   observacoes?: string;
   conciflexLogin?: string;
   conciflexSenha?: string;

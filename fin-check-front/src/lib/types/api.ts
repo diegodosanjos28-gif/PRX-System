@@ -9,6 +9,7 @@ export interface ClienteRequest {
   conciflexLogin: string;
   conciflexSenha: string;
   observacoes?: string;
+  relatorioDiarioAtivo: boolean;
 }
 
 export interface EstabelecimentoRequest {

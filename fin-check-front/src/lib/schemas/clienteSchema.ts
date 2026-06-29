@@ -8,6 +8,7 @@ export const clienteSchema = z.object({
   conciflexLogin: z.string().min(1, 'Login obrigatório'),
   conciflexSenha: z.string().min(1, 'Senha obrigatória'),
   observacoes: z.string().optional(),
+  relatorioDiarioAtivo: z.boolean(),
 });
 
 export type ClienteFormData = z.infer<typeof clienteSchema>;

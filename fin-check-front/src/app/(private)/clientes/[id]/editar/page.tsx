@@ -34,6 +34,7 @@ export default function EditarClientePage() {
             observacoes: cliente.observacoes,
             conciflexLogin: cliente.conciflexLogin,
             conciflexSenha: cliente.conciflexSenha,
+            relatorioDiarioAtivo: cliente.relatorioDiarioAtivo,
           }}
           onSubmit={onSubmit}
           isPending={isPending}

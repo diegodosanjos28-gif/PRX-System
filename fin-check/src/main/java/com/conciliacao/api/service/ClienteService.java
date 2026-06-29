@@ -72,6 +72,7 @@ public class ClienteService {
         cliente.setCnpj(request.cnpj());
         cliente.setWhatsapp(request.whatsapp());
         cliente.setObservacoes(request.observacoes());
+        cliente.setRelatorioDiarioAtivo(request.relatorioDiarioAtivo());
 
         // Atualiza credenciais criptografadas apenas se fornecidas
         if (request.conciflexLogin() != null && !request.conciflexLogin().isBlank()) {
@@ -100,5 +101,10 @@ public class ClienteService {
     @Transactional(readOnly = true)
     public List<Cliente> listarEntidadesAtivas() {
         return clienteRepository.findAllByAtivoTrue();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Cliente> listarEntidadesAtivasComRelatorioDiario() {
+        return clienteRepository.findAllByAtivoTrueAndRelatorioDiarioAtivoTrue();
     }
 }

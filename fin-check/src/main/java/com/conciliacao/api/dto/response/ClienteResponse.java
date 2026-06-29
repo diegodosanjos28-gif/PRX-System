@@ -10,6 +10,7 @@ public record ClienteResponse(
     String cnpj,
     String whatsapp,
     boolean ativo,
+    boolean relatorioDiarioAtivo,
     String observacoes,
     LocalDateTime criadoEm,
     String conciflexLogin,

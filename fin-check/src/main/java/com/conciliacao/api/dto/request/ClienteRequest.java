@@ -27,6 +27,8 @@ public record ClienteRequest(
     @NotBlank(message = "Senha Conciflex é obrigatória")
     String conciflexSenha,
 
-    String observacoes
+    String observacoes,
+
+    boolean relatorioDiarioAtivo
 
 ) {}

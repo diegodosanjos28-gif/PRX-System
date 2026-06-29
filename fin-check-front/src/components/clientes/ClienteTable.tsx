@@ -49,6 +49,7 @@ export function ClienteTable({ clientes }: { clientes: Cliente[] }) {
             <TableHead>CNPJ</TableHead>
             <TableHead>WhatsApp</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Rel. Diário</TableHead>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>
@@ -60,6 +61,12 @@ export function ClienteTable({ clientes }: { clientes: Cliente[] }) {
               <TableCell>{c.whatsapp}</TableCell>
               <TableCell>
                 <StatusBadge label={c.ativo ? 'Ativo' : 'Inativo'} variant={c.ativo ? 'success' : 'neutral'} />
+              </TableCell>
+              <TableCell>
+                <StatusBadge
+                  label={c.relatorioDiarioAtivo ? 'Sim' : 'Não'}
+                  variant={c.relatorioDiarioAtivo ? 'success' : 'neutral'}
+                />
               </TableCell>
               <TableCell className="text-right space-x-1">
                 <Button variant="ghost" size="icon" onClick={() => router.push(`/clientes/${c.id}`)}>

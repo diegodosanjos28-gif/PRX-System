@@ -129,8 +129,8 @@ public class MensagemService {
             : null;
         String templateNome = template != null ? template.getNome() : null;
 
-        List<Cliente> clientes = clienteService.listarEntidadesAtivas();
-        log.info("Envio em lote iniciado: modo={}, templateId={}, totalClientes={}",
+        List<Cliente> clientes = clienteService.listarEntidadesAtivasComRelatorioDiario();
+        log.info("Envio em lote iniciado: modo={}, templateId={}, totalClientes={} (apenas com relatorioDiarioAtivo=true)",
             request.modo(), request.templateId(), clientes.size());
 
         int total = 0, enviados = 0;

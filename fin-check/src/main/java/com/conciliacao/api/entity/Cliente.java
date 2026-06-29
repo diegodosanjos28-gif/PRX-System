@@ -47,6 +47,10 @@ public class Cliente {
     @Builder.Default
     private boolean ativo = true;
 
+    @Column(name = "relatorio_diario_ativo", nullable = false)
+    @Builder.Default
+    private boolean relatorioDiarioAtivo = true;
+
     @Column(name = "observacoes", columnDefinition = "TEXT")
     private String observacoes;
 

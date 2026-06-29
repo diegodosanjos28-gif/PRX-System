@@ -9,6 +9,7 @@ import java.util.UUID;
 
 public interface ClienteRepository extends JpaRepository<Cliente, UUID> {
     List<Cliente> findAllByAtivoTrue();
+    List<Cliente> findAllByAtivoTrueAndRelatorioDiarioAtivoTrue();
     Optional<Cliente> findByCnpj(String cnpj);
     boolean existsByCnpj(String cnpj);
     boolean existsByCnpjAndIdNot(String cnpj, UUID id);

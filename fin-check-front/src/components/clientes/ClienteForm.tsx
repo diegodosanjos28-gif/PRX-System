@@ -1,11 +1,12 @@
 'use client';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { clienteSchema, ClienteFormData } from '@/lib/schemas/clienteSchema';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ShieldCheck } from 'lucide-react';
 
 interface Props {
@@ -15,9 +16,12 @@ interface Props {
 }
 
 export function ClienteForm({ defaultValues, onSubmit, isPending }: Props) {
-  const { register, handleSubmit, formState: { errors } } = useForm<ClienteFormData>({
+  const { register, control, handleSubmit, formState: { errors } } = useForm<ClienteFormData>({
     resolver: zodResolver(clienteSchema),
-    defaultValues,
+    defaultValues: {
+      relatorioDiarioAtivo: true, // novos clientes recebem relatório diário por padrão
+      ...defaultValues,
+    },
   });
 
   return (
@@ -44,6 +48,33 @@ export function ClienteForm({ defaultValues, onSubmit, isPending }: Props) {
           <Input {...register('whatsapp')} placeholder="5547999999999" />
           {errors.whatsapp && <p className="text-xs text-red-500">{errors.whatsapp.message}</p>}
         </div>
+      </div>
+
+      <div className="space-y-2 rounded-md border p-4">
+        <Label className="text-sm font-medium">Relatório Diário *</Label>
+        <p className="text-xs text-muted-foreground">
+          Define se este cliente recebe relatórios diários automáticos por WhatsApp.
+        </p>
+        <Controller
+          name="relatorioDiarioAtivo"
+          control={control}
+          render={({ field }) => (
+            <RadioGroup
+              value={field.value ? 'sim' : 'nao'}
+              onValueChange={(v) => field.onChange(v === 'sim')}
+              className="flex gap-6 pt-1"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="sim" id="rd-sim" />
+                <Label htmlFor="rd-sim" className="font-normal cursor-pointer">Sim</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="nao" id="rd-nao" />
+                <Label htmlFor="rd-nao" className="font-normal cursor-pointer">Não</Label>
+              </div>
+            </RadioGroup>
+          )}
+        />
       </div>
 
       <div className="space-y-2 rounded-md border p-4 bg-muted/30">
