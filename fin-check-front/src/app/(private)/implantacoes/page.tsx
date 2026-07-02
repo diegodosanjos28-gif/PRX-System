@@ -6,7 +6,6 @@ import { ImplantacaoKpiBar } from '@/components/implantacoes/ImplantacaoKpiBar';
 import { ImplantacaoAttentionPanel } from '@/components/implantacoes/ImplantacaoAttentionPanel';
 import { ImplantacaoDerbyTrack } from '@/components/implantacoes/ImplantacaoDerbyTrack';
 import { ImplantacaoCompactTable } from '@/components/implantacoes/ImplantacaoCompactTable';
-import { ImplantacaoCurral } from '@/components/implantacoes/ImplantacaoCurral';
 import {
   ImplantacaoFiltros,
   applyFiltro,
@@ -90,8 +89,6 @@ export default function ImplantacoesPage() {
                 ))}
               </div>
 
-              {/* 4. Currais Operacionais — seção header + filtros + fazenda */}
-              <ImplantacaoCurral implantacoes={filteredData} />
             </>
           )}
         </>
