@@ -1,5 +1,5 @@
 import api from './axios';
-import { ImplantacaoCliente, ImplantacaoDemanda } from '@/lib/types/entities';
+import { ImplantacaoCliente, ImplantacaoDemanda, ImplantacaoRockConcluido } from '@/lib/types/entities';
 import {
   ImplantacaoClienteRequest,
   ImplantacaoDemandaRequest,
@@ -37,3 +37,6 @@ export const patchDemanda = (
 
 export const deleteDemanda = (implantacaoId: string, demandaId: string) =>
   api.delete(`/api/implantacoes/${implantacaoId}/demandas/${demandaId}`);
+
+export const getRocksConcluidos = () =>
+  api.get<ImplantacaoRockConcluido[]>('/api/implantacoes/rocks').then((r) => r.data);

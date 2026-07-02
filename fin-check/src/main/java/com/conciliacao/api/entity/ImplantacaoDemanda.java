@@ -35,6 +35,9 @@ public class ImplantacaoDemanda {
     @Builder.Default
     private boolean concluida = false;
 
+    @Column(name = "concluida_em")
+    private LocalDateTime concluidaEm;
+
     @Column(name = "adquirente", length = 100)
     private String adquirente;
 

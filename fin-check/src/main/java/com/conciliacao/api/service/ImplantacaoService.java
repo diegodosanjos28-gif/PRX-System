@@ -5,6 +5,7 @@ import com.conciliacao.api.dto.request.ImplantacaoDemandaPatchRequest;
 import com.conciliacao.api.dto.request.ImplantacaoDemandaRequest;
 import com.conciliacao.api.dto.response.ImplantacaoClienteResponse;
 import com.conciliacao.api.dto.response.ImplantacaoDemandaResponse;
+import com.conciliacao.api.dto.response.ImplantacaoRockConcluidoResponse;
 import com.conciliacao.api.entity.Cliente;
 import com.conciliacao.api.entity.ImplantacaoCliente;
 import com.conciliacao.api.entity.ImplantacaoDemanda;
@@ -187,7 +188,19 @@ public class ImplantacaoService {
         }
 
         if (request.descricao()  != null) demanda.setDescricao(request.descricao());
-        if (request.concluida()  != null) demanda.setConcluida(request.concluida());
+        if (request.concluida()  != null) {
+            boolean era   = demanda.isConcluida();
+            boolean agora = request.concluida();
+            demanda.setConcluida(agora);
+            if (!era && agora) {
+                // false → true: registra o momento exato da conclusão
+                demanda.setConcluidaEm(LocalDateTime.now());
+            } else if (era && !agora) {
+                // true → false: reabertura — limpa a data de conclusão
+                demanda.setConcluidaEm(null);
+            }
+            // mesma transição (true→true ou false→false) — concluidaEm não muda
+        }
         if (request.prioridade() != null) demanda.setPrioridade(request.prioridade());
         if (request.adquirente() != null) demanda.setAdquirente(request.adquirente());
         if (request.tipo()       != null) demanda.setTipo(request.tipo());
@@ -199,6 +212,11 @@ public class ImplantacaoService {
         });
 
         return mapper.toResponse(demandaRepo.save(demanda));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ImplantacaoRockConcluidoResponse> listarRocksConcluidos() {
+        return demandaRepo.findRocksConcluidos();
     }
 
     @Transactional

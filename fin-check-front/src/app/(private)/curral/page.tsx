@@ -1,6 +1,7 @@
 'use client';
 import { useImplantacoes } from '@/lib/hooks/useImplantacoes';
 import { ImplantacaoCurral } from '@/components/implantacoes/ImplantacaoCurral';
+import { ImplantacaoCurralRocksPanel } from '@/components/implantacoes/ImplantacaoCurralRocksPanel';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { EmptyState } from '@/components/shared/EmptyState';
 
@@ -17,6 +18,9 @@ export default function CurralPage() {
           Clientes pós-onboarding — acompanhamento operacional contínuo.
         </p>
       </div>
+
+      {/* Painel ROCKs Concluídos — carrega independentemente via hook próprio */}
+      <ImplantacaoCurralRocksPanel />
 
       {isLoading ? (
         <LoadingSpinner />

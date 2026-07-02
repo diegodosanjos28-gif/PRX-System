@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@/lib/api/implantacoes';
+
 import {
   ImplantacaoClienteRequest,
   ImplantacaoDemandaRequest,
@@ -70,3 +71,6 @@ export const useDeleteDemanda = (implantacaoId: string) => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['implantacoes', implantacaoId] }),
   });
 };
+
+export const useRocksConcluidos = () =>
+  useQuery({ queryKey: ['implantacoes', 'rocks'], queryFn: api.getRocksConcluidos });

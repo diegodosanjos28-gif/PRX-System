@@ -1,5 +1,6 @@
 package com.conciliacao.api.repository;
 
+import com.conciliacao.api.dto.response.ImplantacaoRockConcluidoResponse;
 import com.conciliacao.api.entity.ImplantacaoDemanda;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -28,4 +29,26 @@ public interface ImplantacaoDemandaRepository extends JpaRepository<ImplantacaoD
         GROUP BY d.implantacao.id
     """)
     List<Object[]> findResumoAbertasPorImplantacao();
+
+    // Retorna todas as demandas concluídas (com concluidaEm preenchido) de clientes na etapa curral.
+    // Usado exclusivamente pelo painel ROCKs Concluídos da aba Curral.
+    @Query("""
+        SELECT new com.conciliacao.api.dto.response.ImplantacaoRockConcluidoResponse(
+            d.implantacao.id,
+            d.implantacao.cliente.id,
+            d.implantacao.cliente.razaoSocial,
+            d.implantacao.cliente.nomeFantasia,
+            d.id,
+            d.descricao,
+            d.adquirente,
+            d.prioridade,
+            d.concluidaEm
+        )
+        FROM ImplantacaoDemanda d
+        WHERE d.concluida = true
+          AND d.concluidaEm IS NOT NULL
+          AND d.implantacao.etapa = 'curral'
+        ORDER BY d.concluidaEm DESC
+    """)
+    List<ImplantacaoRockConcluidoResponse> findRocksConcluidos();
 }

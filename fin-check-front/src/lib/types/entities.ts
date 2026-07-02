@@ -185,6 +185,19 @@ export interface ImplantacaoDemanda {
   tipo: DemandaTipo;
   createdAt: string;
   updatedAt: string;
+  concluidaEm: string | null;
+}
+
+export interface ImplantacaoRockConcluido {
+  implantacaoId: string;
+  clienteId: string;
+  clienteRazaoSocial: string;
+  clienteNomeFantasia: string | null;
+  demandaId: string;
+  descricao: string;
+  adquirente: string | null;
+  prioridade: DemandaPrioridade;
+  concluidaEm: string;
 }
 
 export interface ImplantacaoCliente {

@@ -5,6 +5,7 @@ import com.conciliacao.api.dto.request.ImplantacaoDemandaPatchRequest;
 import com.conciliacao.api.dto.request.ImplantacaoDemandaRequest;
 import com.conciliacao.api.dto.response.ImplantacaoClienteResponse;
 import com.conciliacao.api.dto.response.ImplantacaoDemandaResponse;
+import com.conciliacao.api.dto.response.ImplantacaoRockConcluidoResponse;
 import com.conciliacao.api.service.ImplantacaoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +52,13 @@ public class ImplantacaoController {
     public ResponseEntity<Void> deletar(@PathVariable UUID id) {
         implantacaoService.deletar(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // ── ROCKs Concluídos (painel da aba Curral) ───────────────────────────────
+
+    @GetMapping("/rocks")
+    public ResponseEntity<List<ImplantacaoRockConcluidoResponse>> listarRocksConcluidos() {
+        return ResponseEntity.ok(implantacaoService.listarRocksConcluidos());
     }
 
     // ── Demandas ──────────────────────────────────────────────────────────────
