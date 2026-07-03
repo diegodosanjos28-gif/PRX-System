@@ -2,6 +2,7 @@
 import { useImplantacoes } from '@/lib/hooks/useImplantacoes';
 import { ImplantacaoCurral } from '@/components/implantacoes/ImplantacaoCurral';
 import { ImplantacaoCurralRocksPanel } from '@/components/implantacoes/ImplantacaoCurralRocksPanel';
+import { ImplantacaoCurralPrioridadePanel } from '@/components/implantacoes/ImplantacaoCurralPrioridadePanel';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { EmptyState } from '@/components/shared/EmptyState';
 
@@ -19,8 +20,11 @@ export default function CurralPage() {
         </p>
       </div>
 
-      {/* Painel ROCKs Concluídos — carrega independentemente via hook próprio */}
-      <ImplantacaoCurralRocksPanel />
+      {/* Dois painéis de KPI lado a lado */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ImplantacaoCurralRocksPanel />
+        <ImplantacaoCurralPrioridadePanel implantacoes={allData} />
+      </div>
 
       {isLoading ? (
         <LoadingSpinner />
