@@ -16,11 +16,42 @@ function formatDate(iso: string): string {
 }
 
 const PRIO_STYLE: Record<DemandaPrioridade, { label: string; cls: string }> = {
-  baixa:  { label: 'Baixa',   cls: 'bg-gray-100 text-gray-500' },
-  media:  { label: 'Média',   cls: 'bg-blue-50 text-blue-600'  },
-  alta:   { label: 'Alta',    cls: 'bg-orange-50 text-orange-600' },
-  critica:{ label: 'Crítica', cls: 'bg-red-50 text-red-600'    },
+  baixa:   { label: 'Baixa',   cls: 'bg-gray-100 text-gray-500'     },
+  media:   { label: 'Média',   cls: 'bg-blue-50 text-blue-600'      },
+  alta:    { label: 'Alta',    cls: 'bg-orange-50 text-orange-600'  },
+  critica: { label: 'Crítica', cls: 'bg-red-50 text-red-600'        },
 };
+
+// ── types ─────────────────────────────────────────────────────────────────────
+
+interface ClienteGroup {
+  clienteId: string;
+  nome: string;
+  rocks: ImplantacaoRockConcluido[];
+}
+
+// ── grouping ──────────────────────────────────────────────────────────────────
+
+function groupByCliente(rocks: ImplantacaoRockConcluido[]): ClienteGroup[] {
+  const map = new Map<string, ClienteGroup>();
+
+  for (const r of rocks) {
+    const key = r.clienteId;
+    if (!map.has(key)) {
+      map.set(key, {
+        clienteId: key,
+        nome: r.clienteNomeFantasia ?? r.clienteRazaoSocial,
+        rocks: [],
+      });
+    }
+    map.get(key)!.rocks.push(r);
+  }
+
+  // Sort groups alphabetically by client name
+  return Array.from(map.values()).sort((a, b) =>
+    a.nome.localeCompare(b.nome, 'pt-BR'),
+  );
+}
 
 // ── sub-components ────────────────────────────────────────────────────────────
 
@@ -34,22 +65,27 @@ function EmptyRocks() {
   );
 }
 
-interface RockItemProps {
+interface DemandaItemProps {
   rock: ImplantacaoRockConcluido;
+  isLast: boolean;
 }
 
-function RockItem({ rock }: RockItemProps) {
+function DemandaItem({ rock, isLast }: DemandaItemProps) {
   const prio = PRIO_STYLE[rock.prioridade] ?? { label: rock.prioridade, cls: 'bg-gray-100 text-gray-500' };
-  const clienteNome = rock.clienteNomeFantasia ?? rock.clienteRazaoSocial;
 
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-dashed border-gray-100 last:border-0">
-      <CheckCircle2 className="h-4 w-4 mt-0.5 text-emerald-500 flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-800 truncate">{clienteNome}</p>
-        <p className="text-sm text-gray-600 mt-0.5">{rock.descricao}</p>
-        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-          <span className={`text-[10px] font-700 px-2 py-0.5 rounded-full ${prio.cls}`}>
+    <div
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 8,
+        paddingBottom: isLast ? 0 : 8,
+        marginBottom: isLast ? 0 : 2,
+      }}
+    >
+      <CheckCircle2 style={{ width: 14, height: 14, color: '#10B981', flexShrink: 0, marginTop: 2 }} />
+      <div>
+        <p style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>{rock.descricao}</p>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${prio.cls}`}>
             {prio.label}
           </span>
           {rock.adquirente && (
@@ -58,6 +94,39 @@ function RockItem({ rock }: RockItemProps) {
             </span>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+interface ClienteGroupCardProps {
+  group: ClienteGroup;
+  isLast: boolean;
+}
+
+function ClienteGroupCard({ group, isLast }: ClienteGroupCardProps) {
+  return (
+    <div
+      style={{
+        paddingBottom: isLast ? 0 : 14,
+        marginBottom: isLast ? 0 : 14,
+        borderBottom: isLast ? 'none' : '1px solid #F0F2F4',
+      }}
+    >
+      {/* Client name — appears once per group */}
+      <p style={{ fontSize: 13, fontWeight: 700, color: '#1C2024', marginBottom: 8 }}>
+        {group.nome}
+      </p>
+
+      {/* Demands indented below client name */}
+      <div style={{ paddingLeft: 4 }}>
+        {group.rocks.map((r, i) => (
+          <DemandaItem
+            key={r.demandaId}
+            rock={r}
+            isLast={i === group.rocks.length - 1}
+          />
+        ))}
       </div>
     </div>
   );
@@ -72,7 +141,7 @@ export function ImplantacaoCurralRocksPanel() {
 
   const allRocks = rocks ?? [];
 
-  // Encontra a data mais recente de conclusão (por dia calendário)
+  // Most recent calendar date with concluded demands
   const latestDate = allRocks.reduce<string | null>((max, r) => {
     const d = dateKey(r.concluidaEm);
     return max === null || d > max ? d : max;
@@ -81,6 +150,8 @@ export function ImplantacaoCurralRocksPanel() {
   const rocksToShow = latestDate
     ? allRocks.filter((r) => dateKey(r.concluidaEm) === latestDate)
     : [];
+
+  const groups = groupByCliente(rocksToShow);
 
   return (
     <div
@@ -113,18 +184,12 @@ export function ImplantacaoCurralRocksPanel() {
           </span>
         )}
         {rocksToShow.length > 0 && (
-          <span
-            style={{
-              marginLeft: 'auto', fontSize: 11, fontWeight: 700,
-              color: '#6B7178',
-            }}
-          >
+          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: '#6B7178' }}>
             {rocksToShow.length} {rocksToShow.length === 1 ? 'demanda' : 'demandas'}
           </span>
         )}
       </div>
 
-      {/* Subtitle */}
       {latestDate && (
         <p style={{ fontSize: 11, color: '#9BA3AE', marginBottom: 12, marginLeft: 28 }}>
           Demandas concluídas na última data com registro
@@ -135,9 +200,9 @@ export function ImplantacaoCurralRocksPanel() {
       {rocksToShow.length === 0 ? (
         <EmptyRocks />
       ) : (
-        <div style={{ marginLeft: 4 }}>
-          {rocksToShow.map((r) => (
-            <RockItem key={r.demandaId} rock={r} />
+        <div style={{ marginTop: 4 }}>
+          {groups.map((g, i) => (
+            <ClienteGroupCard key={g.clienteId} group={g} isLast={i === groups.length - 1} />
           ))}
         </div>
       )}
