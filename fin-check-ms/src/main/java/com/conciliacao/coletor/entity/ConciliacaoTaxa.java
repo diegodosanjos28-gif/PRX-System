@@ -8,11 +8,30 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Linha agregada de conciliação de taxas para uma data de venda.
+ *
+ * <p>A identidade de negócio é a chave lógica
+ * {@code (estabelecimento_id, data_venda, codigo_adquirente, cod_bandeira,
+ * codigo_modalidade, codigo_produto, auditada)} — refletida pela constraint
+ * {@code uq_ct_chave_logica} (migration V25).
+ *
+ * <p>{@code idConciflex} NÃO é identidade: a API Conciflex gera as linhas
+ * agregadas no momento da consulta e atribui um ID novo a cada execução. Ele é
+ * mantido apenas como rastreabilidade da última coleta.
+ *
+ * <p>A constraint real no banco usa {@code NULLS NOT DISTINCT}, semântica que a
+ * anotação JPA não expressa. O banco é a fonte de verdade; esta declaração serve
+ * para documentação e geração de DDL.
+ */
 @Entity
 @Table(name = "conciliacao_taxas",
     uniqueConstraints = @UniqueConstraint(
-        name = "uq_ct_id_conciflex_estabelecimento",
-        columnNames = {"id_conciflex", "estabelecimento_id"}
+        name = "uq_ct_chave_logica",
+        columnNames = {
+            "estabelecimento_id", "data_venda", "codigo_adquirente", "cod_bandeira",
+            "codigo_modalidade", "codigo_produto", "auditada"
+        }
     ),
     indexes = {
         @Index(name = "idx_ct_estabelecimento_data", columnList = "estabelecimento_id, data_venda")

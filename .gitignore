@@ -17,8 +17,11 @@
 Thumbs.db
 desktop.ini
 
-# ── Maven (fin-check sub-module) ───────────────────────────────────────────────
-fin-check/target/
+# ── Maven ──────────────────────────────────────────────────────────────────────
+# Regra genérica: cobre fin-check, fin-check-ms e qualquer módulo Maven futuro.
+# Substituiu a regra específica 'fin-check/target/', que deixava os artefatos de
+# build do coletor rastreados pelo Git.
+**/target/
 fin-check/.mvn/wrapper/maven-wrapper.jar
 
 # ── Docker ─────────────────────────────────────────────────────────────────────

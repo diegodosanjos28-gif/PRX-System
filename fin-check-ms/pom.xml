@@ -78,6 +78,38 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!--
+            Testcontainers — PostgreSQL 16 real para os testes de integração.
+            H2 não implementa INSERT ... ON CONFLICT, CTEs modificadoras de dados
+            nem NULLS NOT DISTINCT, então não valida o UPSERT deste módulo.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+            Flyway apenas em escopo de teste. Em produção o schema é criado pelo
+            módulo fin-check; aqui é usado para montar o mesmo schema no container
+            efêmero antes de exercitar o UPSERT.
+        -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
