@@ -33,6 +33,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -70,6 +71,19 @@ public class MensagemService {
     private final ConciliacaoTaxaRepository conciliacaoTaxaRepository;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    // Códigos de modalidade da Conciflex, conforme os valores realmente presentes em
+    // conciliacao_taxas. O código é estável e integra a chave lógica da tabela; o nome
+    // descritivo varia entre coletas e por isso não é usado para classificar.
+    //   0 → Débito | 1 → Crédito | 3 → Voucher | 17 → Parcelado | 21 → Pix
+    // "17 — Parcelado" fica deliberadamente FORA do mix: o relatório expõe quatro
+    // modalidades, e a composição anterior (casamento por fragmento de texto) também
+    // nunca o classificava. Consequência: a soma do mix pode ser menor que
+    // "Vendas da semana". Reclassificá-lo é decisão de negócio, não de implementação.
+    private static final String COD_MODALIDADE_DEBITO  = "0";
+    private static final String COD_MODALIDADE_CREDITO = "1";
+    private static final String COD_MODALIDADE_VOUCHER = "3";
+    private static final String COD_MODALIDADE_PIX     = "21";
 
     /**
      * Gera a mensagem sem salvar — o operador revisa antes de enviar.
@@ -272,12 +286,30 @@ public class MensagemService {
 
         List<RecebimentoResponse> recs = recebimentos.recebimentos();
 
-        // ── totalizadores por modalidade (computed in-memory from fetched recebimentos) ──
-        BigDecimal totalValorBruto = somarValorBruto(recs);
-        BigDecimal totalCredito    = somarPorModalidade(recs, "credit");
-        BigDecimal totalDebito     = somarPorModalidade(recs, "debit");
-        BigDecimal totalVouchers   = somarPorModalidade(recs, "voucher");
-        BigDecimal totalPix        = somarPorModalidade(recs, "pix");
+        // ── indicadores de VENDAS — fonte: conciliacao_taxas, por data_venda ───────────
+        // Estes números descrevem o que foi VENDIDO no período. Não podem sair de
+        // `recebimentos`: aquela tabela registra liquidações por data_pagamento, uma venda
+        // pode ser liquidada em parcelas e em datas fora do período, e as linhas de ajuste
+        // financeiro não representam venda alguma.
+        BigDecimal totalValorBruto = coalesceZero(
+            conciliacaoTaxaRepository.sumValorBruto(est.getId(), req.dataInicio(), req.dataFim())
+        );
+
+        Map<String, BigDecimal> vendasPorModalidade = new HashMap<>();
+        for (Object[] linha : conciliacaoTaxaRepository
+                .sumValorBrutoPorModalidade(est.getId(), req.dataInicio(), req.dataFim())) {
+            vendasPorModalidade.merge(
+                (String) linha[0],
+                linha[1] != null ? (BigDecimal) linha[1] : BigDecimal.ZERO,
+                BigDecimal::add
+            );
+        }
+        BigDecimal totalDebito   = vendasPorModalidade.getOrDefault(COD_MODALIDADE_DEBITO,  BigDecimal.ZERO);
+        BigDecimal totalCredito  = vendasPorModalidade.getOrDefault(COD_MODALIDADE_CREDITO, BigDecimal.ZERO);
+        BigDecimal totalVouchers = vendasPorModalidade.getOrDefault(COD_MODALIDADE_VOUCHER, BigDecimal.ZERO);
+        BigDecimal totalPix      = vendasPorModalidade.getOrDefault(COD_MODALIDADE_PIX,     BigDecimal.ZERO);
+
+        // Regra de dias preservada: dias corridos do período, inclusive nas duas pontas.
         long diasPeriodo = ChronoUnit.DAYS.between(req.dataInicio(), req.dataFim()) + 1;
         BigDecimal mediaVendas = diasPeriodo > 0
             ? totalValorBruto.divide(BigDecimal.valueOf(diasPeriodo), 2, RoundingMode.HALF_UP)
@@ -286,6 +318,13 @@ public class MensagemService {
         BigDecimal totalTaxaPraticadaRS = coalesceZero(
             conciliacaoTaxaRepository.sumTaxaPraticadaRs(est.getId(), req.dataInicio(), req.dataFim())
         );
+
+        // Líquido PREVISTO das vendas do período = bruto vendido − taxa efetivamente
+        // praticada sobre essas vendas. Ambas as parcelas saem de conciliacao_taxas e do
+        // mesmo recorte por data_venda, então o indicador é internamente coerente com
+        // "Vendas da semana" e "Taxas". Não é o valor liquidado no período — esse é
+        // `recebimentos.valor_liquido`, exposto separadamente como {totalRecebido}.
+        BigDecimal liquidoPrevisto = totalValorBruto.subtract(totalTaxaPraticadaRS);
 
         // ── operadoras ordenadas por volume total bruto ────────────────────
         List<Map.Entry<String, BigDecimal>> operadorasOrdenadas = recs.stream()
@@ -328,7 +367,7 @@ public class MensagemService {
         valores.put("templateOperadorasQtd", String.valueOf(operadorasOrdenadas.size()));
         valores.put("totalValorBruto",       formatarValor(totalValorBruto));
         valores.put("totalTaxaPraticadaRS",  formatarValor(totalTaxaPraticadaRS));
-        valores.put("liquidoPrevisto",       formatarValor(recebimentos.totalRecebido()));
+        valores.put("liquidoPrevisto",       formatarValor(liquidoPrevisto));
         valores.put("totalCredito",          formatarValor(totalCredito));
         valores.put("totalDebito",           formatarValor(totalDebito));
         valores.put("totalVouchers",         formatarValor(totalVouchers));
@@ -446,24 +485,11 @@ public class MensagemService {
         return val != null ? val : BigDecimal.ZERO;
     }
 
-    private static BigDecimal somarValorBruto(List<RecebimentoResponse> recs) {
-        return recs.stream()
-            .map(r -> r.valorBruto() != null ? r.valorBruto() : BigDecimal.ZERO)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
     /** Normalizes accented Portuguese strings for case-insensitive fragment matching. */
     private static String normalizar(String s) {
         if (s == null) return "";
         return Normalizer.normalize(s.toLowerCase(), Normalizer.Form.NFD)
             .replaceAll("[\\p{InCombiningDiacriticalMarks}]", "");
-    }
-
-    private static BigDecimal somarPorModalidade(List<RecebimentoResponse> recs, String frag) {
-        return recs.stream()
-            .filter(r -> normalizar(r.modalidade()).contains(frag))
-            .map(r -> r.valorBruto() != null ? r.valorBruto() : BigDecimal.ZERO)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private static BigDecimal somarPorModalidadeEBandeira(List<RecebimentoResponse> recs,

@@ -142,4 +142,49 @@ public interface ConciliacaoTaxaRepository extends JpaRepository<ConciliacaoTaxa
         Pageable pageable
     );
 
+    /**
+     * Valor bruto VENDIDO no período, pela data da venda.
+     *
+     * <p>Base do indicador "Vendas da semana" do relatório semanal. Não confundir com
+     * {@code recebimentos}: aquela tabela registra liquidações, indexadas por
+     * {@code data_pagamento}, e uma venda pode ser liquidada em datas — e em parcelas —
+     * diferentes da data em que ocorreu.
+     *
+     * <p>Agrega exclusivamente {@code conciliacao_taxas}, sem JOIN com outras tabelas,
+     * para não multiplicar as linhas da chave lógica protegida por {@code uq_ct_chave_logica}.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(ct.valorBruto), 0)
+        FROM ConciliacaoTaxa ct
+        WHERE ct.estabelecimento.id = :estabelecimentoId
+          AND ct.dataVenda BETWEEN :inicio AND :fim
+        """)
+    BigDecimal sumValorBruto(
+        @Param("estabelecimentoId") UUID estabelecimentoId,
+        @Param("inicio") LocalDate inicio,
+        @Param("fim") LocalDate fim
+    );
+
+    /**
+     * Valor bruto vendido no período agrupado por {@code codigo_modalidade}.
+     *
+     * <p>Base do mix de pagamento (Pix / Débito / Crédito / Voucher). O agrupamento usa o
+     * CÓDIGO e não o nome descritivo: o código é estável e integra a chave lógica da
+     * tabela, enquanto o nome varia entre coletas.
+     *
+     * @return linhas {@code [codigoModalidade (String), somaValorBruto (BigDecimal)]}.
+     */
+    @Query("""
+        SELECT ct.codigoModalidade, COALESCE(SUM(ct.valorBruto), 0)
+        FROM ConciliacaoTaxa ct
+        WHERE ct.estabelecimento.id = :estabelecimentoId
+          AND ct.dataVenda BETWEEN :inicio AND :fim
+        GROUP BY ct.codigoModalidade
+        """)
+    List<Object[]> sumValorBrutoPorModalidade(
+        @Param("estabelecimentoId") UUID estabelecimentoId,
+        @Param("inicio") LocalDate inicio,
+        @Param("fim") LocalDate fim
+    );
+
 }
