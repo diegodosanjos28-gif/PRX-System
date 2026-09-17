@@ -195,17 +195,17 @@ public interface ConciliacaoTaxaRepository extends JpaRepository<ConciliacaoTaxa
         FROM antiga a
         WHERE EXISTS (SELECT 1 FROM upserted)
           AND (
-                 a.valor_bruto                  IS DISTINCT FROM :valorBruto
-              OR a.valor_desconto               IS DISTINCT FROM :valorDesconto
-              OR a.percentual_taxa              IS DISTINCT FROM :percentualTaxa
-              OR a.taxa_contratada              IS DISTINCT FROM :taxaContratada
+                 a.valor_bruto                  IS DISTINCT FROM CAST(:valorBruto AS NUMERIC(15,2))
+              OR a.valor_desconto               IS DISTINCT FROM CAST(:valorDesconto AS NUMERIC(15,6))
+              OR a.percentual_taxa              IS DISTINCT FROM CAST(:percentualTaxa AS NUMERIC(8,4))
+              OR a.taxa_contratada              IS DISTINCT FROM CAST(:taxaContratada AS NUMERIC(8,4))
               OR a.quantidade                   IS DISTINCT FROM :quantidade
-              OR a.taxa_praticada_rs            IS DISTINCT FROM :taxaPraticadaRs
-              OR a.taxa_praticada_cadastrada_rs IS DISTINCT FROM :taxaPraticadaCadastradaRs
-              OR a.taxa_contratada_rs           IS DISTINCT FROM :taxaContratadaRs
-              OR a.total_taxa_nao_contratada_rs IS DISTINCT FROM :totalTaxaNaoContratadaRs
-              OR a.perda_rs                     IS DISTINCT FROM :perdaRs
-              OR a.perda                        IS DISTINCT FROM :perda
+              OR a.taxa_praticada_rs            IS DISTINCT FROM CAST(:taxaPraticadaRs AS NUMERIC(15,2))
+              OR a.taxa_praticada_cadastrada_rs IS DISTINCT FROM CAST(:taxaPraticadaCadastradaRs AS NUMERIC(15,2))
+              OR a.taxa_contratada_rs           IS DISTINCT FROM CAST(:taxaContratadaRs AS NUMERIC(15,2))
+              OR a.total_taxa_nao_contratada_rs IS DISTINCT FROM CAST(:totalTaxaNaoContratadaRs AS NUMERIC(15,2))
+              OR a.perda_rs                     IS DISTINCT FROM CAST(:perdaRs AS NUMERIC(15,2))
+              OR a.perda                        IS DISTINCT FROM CAST(:perda AS NUMERIC(15,4))
               OR a.adquirente                   IS DISTINCT FROM CAST(:adquirente AS VARCHAR)
               OR a.bandeira                     IS DISTINCT FROM CAST(:bandeira AS VARCHAR)
               OR a.modalidade                   IS DISTINCT FROM CAST(:modalidade AS VARCHAR)

@@ -147,6 +147,45 @@ class ConciliacaoTaxaUpsertTest {
         assertThat(campoValor("valor_bruto")).isEqualByComparingTo("250.75");
     }
 
+    @Test
+    @DisplayName("recoleta com diferença apenas além da escala persistida não gera histórico")
+    void recoletaComPrecisaoExcedenteNaoGeraHistorico() {
+        BigDecimal valorApi = new BigDecimal("100.124999");
+
+        upsert("conc-prec-1", valorApi, 10, COLETA_1);
+        upsert("conc-prec-2", valorApi, 10, COLETA_2);
+
+        assertThat(linhasOperacionais()).isEqualTo(1);
+
+        // NUMERIC(15,2) persiste 100.124999 como 100.12.
+        assertThat(campoValor("valor_bruto"))
+            .isEqualByComparingTo("100.12");
+
+        // A precisão descartada pelo banco não representa mudança real.
+        assertThat(linhasHistorico()).isZero();
+    }
+
+    @Test
+    @DisplayName("mudança que atravessa a escala persistida gera histórico")
+    void mudancaQueAtravessaEscalaPersistidaGeraHistorico() {
+        upsert("conc-round-1", new BigDecimal("100.124999"), 10, COLETA_1);
+        upsert("conc-round-2", new BigDecimal("100.126000"), 10, COLETA_2);
+
+        assertThat(linhasOperacionais()).isEqualTo(1);
+        assertThat(campoValor("valor_bruto"))
+            .isEqualByComparingTo("100.13");
+
+        assertThat(linhasHistorico()).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+            "SELECT valor_bruto FROM conciliacao_taxas_historico",
+            BigDecimal.class))
+            .isEqualByComparingTo("100.12");
+        assertThat(jdbc.queryForObject(
+            "SELECT motivo_arquivamento FROM conciliacao_taxas_historico",
+            String.class))
+            .isEqualTo("UPSERT_VALUE_CHANGE");
+    }
+
     // ── Teste 3 — alteração de valor ─────────────────────────────────────────
 
     @Test
