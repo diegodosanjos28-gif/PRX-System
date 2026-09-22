@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { ImplantacaoCliente } from '@/lib/types/entities';
+import { ImplantacaoDespacharDialog } from './ImplantacaoDespacharDialog';
 
 // ─── Mood ─────────────────────────────────────────────────────────────────────
 
@@ -165,6 +166,7 @@ interface Props {
 
 export function ImplantacaoCurral({ implantacoes }: Props) {
   const [filter, setFilter] = useState<CurralFilter>('todos');
+  const [despacharOpen, setDespacharOpen] = useState(false);
 
   const curralAll      = implantacoes.filter((i) => i.etapa === 'curral');
   const curralFiltered = applyMoodFilter(curralAll, filter);
@@ -359,20 +361,44 @@ export function ImplantacaoCurral({ implantacoes }: Props) {
         }}>
           Clique em um cavalo para ver as demandas operacionais
         </span>
-        <Link
-          href="/implantacoes/nova"
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '10px 16px', borderRadius: 12,
-            background: 'linear-gradient(135deg,#00A19B,#007F7A)',
-            color: '#fff', fontWeight: 700, fontSize: 13,
-            textDecoration: 'none', letterSpacing: '.2px',
-            boxShadow: '0 6px 16px rgba(0,161,155,.35)',
-          }}
-        >
-          🐴 Nova Implantação
-        </Link>
+        {/* Coluna de ações: "Nova Implantação" (inalterada) e "Despachar" logo abaixo,
+            ambas esticadas para a mesma largura. */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+          <Link
+            href="/implantacoes/nova"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '10px 16px', borderRadius: 12,
+              background: 'linear-gradient(135deg,#00A19B,#007F7A)',
+              color: '#fff', fontWeight: 700, fontSize: 13,
+              textDecoration: 'none', letterSpacing: '.2px',
+              boxShadow: '0 6px 16px rgba(0,161,155,.35)',
+            }}
+          >
+            🐴 Nova Implantação
+          </Link>
+          <button
+            type="button"
+            onClick={() => setDespacharOpen(true)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '10px 16px', borderRadius: 12, border: 'none',
+              background: 'linear-gradient(135deg,#D9534F,#B23B37)',
+              color: '#fff', fontWeight: 700, fontSize: 13,
+              letterSpacing: '.2px', cursor: 'pointer',
+              boxShadow: '0 6px 16px rgba(217,83,79,.35)',
+            }}
+          >
+            Despachar
+          </button>
+        </div>
       </div>
+
+      <ImplantacaoDespacharDialog
+        open={despacharOpen}
+        onOpenChange={setDespacharOpen}
+        candidatos={curralAll}
+      />
 
       {/* ── Filter chips ──────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>

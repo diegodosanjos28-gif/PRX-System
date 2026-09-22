@@ -45,4 +45,22 @@ public class ClienteController {
         clienteService.inativar(id);
         return ResponseEntity.noContent().build();
     }
+
+    /**
+     * Exclusão DEFINITIVA do cliente e de todos os dados exclusivamente dele — a ação
+     * "Despachar" do Curral. Irreversível.
+     *
+     * <p>Rota separada de propósito: {@code DELETE /api/clientes/{id}} continua sendo
+     * inativação (soft delete). São operações diferentes e o caminho deixa isso explícito.
+     *
+     * <p>Permitida apenas para cliente com implantação em {@code etapa = 'curral'};
+     * qualquer outro caso responde 409 sem remover nada.
+     *
+     * @return 204 na exclusão; 404 se o cliente não existe; 409 se não está no Curral.
+     */
+    @DeleteMapping("/{id}/permanente")
+    public ResponseEntity<Void> excluirDefinitivamente(@PathVariable UUID id) {
+        clienteService.excluirDefinitivamente(id);
+        return ResponseEntity.noContent().build();
+    }
 }

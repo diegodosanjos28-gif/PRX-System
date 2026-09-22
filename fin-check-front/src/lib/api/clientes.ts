@@ -7,3 +7,10 @@ export const getCliente = (id: string) => api.get<Cliente>(`/api/clientes/${id}`
 export const createCliente = (data: ClienteRequest) => api.post<Cliente>('/api/clientes', data).then((r) => r.data);
 export const updateCliente = (id: string, data: ClienteRequest) => api.put<Cliente>(`/api/clientes/${id}`, data).then((r) => r.data);
 export const deleteCliente = (id: string) => api.delete(`/api/clientes/${id}`);
+
+/**
+ * Exclusão DEFINITIVA do cliente e de todos os dados vinculados — ação "Despachar"
+ * do Curral. Irreversível, e diferente de `deleteCliente`, que apenas inativa.
+ * O backend só aceita clientes com implantação em etapa 'curral'.
+ */
+export const despacharCliente = (id: string) => api.delete(`/api/clientes/${id}/permanente`);
