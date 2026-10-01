@@ -125,6 +125,7 @@ public class ImplantacaoService {
 
         impl.setEtapa(request.etapa());
         impl.setStatus(request.status());
+        impl.setClasse(request.classe());
         impl.setResponsavel(request.responsavel());
         impl.setDonoContato(request.donoContato());
         impl.setObservacoes(request.observacoes());

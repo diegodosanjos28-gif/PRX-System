@@ -45,7 +45,7 @@ public interface ImplantacaoMapper {
         ImplantacaoClienteResponse base = toListResponse(entity);
         return new ImplantacaoClienteResponse(
             base.id(), base.clienteId(), base.clienteRazaoSocial(), base.clienteNomeFantasia(),
-            base.etapa(), base.status(), base.responsavel(), base.donoContato(),
+            base.etapa(), base.status(), base.classe(), base.responsavel(), base.donoContato(),
             base.adquirentes(), base.dataEntradaCurral(), base.etapaIniciadaEm(),
             base.observacoes(), base.progressJson(), base.ultimoMovimento(),
             base.createdAt(), base.updatedAt(),

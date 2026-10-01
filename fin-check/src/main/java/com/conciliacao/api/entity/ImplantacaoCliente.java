@@ -38,6 +38,15 @@ public class ImplantacaoCliente {
     @Column(name = "status", length = 20)
     private String status;
 
+    /**
+     * Classe comercial: {@code PRIME}, {@code GOLD}, {@code PLATIUM} ou {@code BRONZE}.
+     *
+     * <p>{@code null} para registros ainda não classificados — dimensão independente de
+     * {@link #etapa} e da saúde operacional (V26).
+     */
+    @Column(name = "classe", length = 20)
+    private String classe;
+
     @Column(name = "responsavel", length = 100)
     private String responsavel;
 

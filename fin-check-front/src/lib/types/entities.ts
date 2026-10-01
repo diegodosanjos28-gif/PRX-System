@@ -172,6 +172,8 @@ export interface LogColeta {
 
 export type ImplantacaoEtapa = 'pre' | 'corrida' | 'onboarding' | 'curral';
 export type ImplantacaoStatus = 'fluindo' | 'aguardando' | 'travado';
+/** Classe comercial do cliente implantado. "PLATIUM" é a grafia adotada pelo negócio. */
+export type ImplantacaoClasse = 'PRIME' | 'GOLD' | 'PLATIUM' | 'BRONZE';
 export type DemandaPrioridade = 'baixa' | 'media' | 'alta' | 'critica';
 export type DemandaTipo = 'pista' | 'curral';
 
@@ -207,6 +209,8 @@ export interface ImplantacaoCliente {
   clienteNomeFantasia: string | null;
   etapa: ImplantacaoEtapa;
   status: ImplantacaoStatus | null;
+  /** Classe comercial (V26). `null` em registros ainda não classificados. */
+  classe: ImplantacaoClasse | null;
   responsavel: string | null;
   donoContato: string | null;
   adquirentes: string[] | null;

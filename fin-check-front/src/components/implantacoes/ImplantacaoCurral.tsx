@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
-import { ImplantacaoCliente } from '@/lib/types/entities';
+import { ImplantacaoCliente, ImplantacaoClasse } from '@/lib/types/entities';
 import { ImplantacaoDespacharDialog } from './ImplantacaoDespacharDialog';
 
 // ─── Mood ─────────────────────────────────────────────────────────────────────
@@ -22,99 +23,52 @@ function computeMood(count: number, maiorPrioridade: string | null): MoodResult 
   return   { key: 'preocupado', emoji: '😟', label: 'Atenção', color: '#E8A100', op: 'Atenção operacional' };
 }
 
-// ─── Coat helpers ─────────────────────────────────────────────────────────────
+// ─── Cavalo: arte oficial ─────────────────────────────────────────────────────
+// A sela faz parte da própria arte — não há nenhuma camada desenhada por cima.
+//
+// Os quatro PNGs extraídos da sprite têm canvas idêntico de 599×697 e o cavalo na
+// mesma posição em todos, então trocar de Classe não faz o animal pular nem mudar
+// de tamanho. 73×85 preserva a razão 599/697 — a imagem só é escalada, nunca
+// deformada. O cavalo fica com ~70×84px dentro do slot de 86px do card.
+//
+// Era 102×85 quando a arte era paisagem (1374×1145); as novas são retrato, daí a
+// largura menor. A ALTURA foi mantida, de modo que a presença visual no card não muda.
+const HORSE_W = 73;
+const HORSE_H = 85;
 
-const COAT_PALETTE = [
-  { coat: '#8B5E3C', light: '#C48A5E' },
-  { coat: '#4A3728', light: '#7D5A44' },
-  { coat: '#C8A97E', light: '#E8D4B4' },
-  { coat: '#1C1008', light: '#3D2510' },
-  { coat: '#6B4226', light: '#A06B40' },
-  { coat: '#D4A85C', light: '#F0CC88' },
-];
+// Classe → arte. A sela faz parte de cada PNG: não há recoloração, filtro nem
+// camada desenhada por cima. `null` mantém o cavalo de sela de couro marrom, que
+// é uma representação distinta de BRONZE.
+const HORSE_POR_CLASSE: Record<ImplantacaoClasse, string> = {
+  PRIME:   '/curral/cavalo-prime.png',    // sela azul (cristal/diamante)
+  GOLD:    '/curral/cavalo-gold.png',     // sela dourada
+  PLATIUM: '/curral/cavalo-platium.png',  // sela prateada
+  BRONZE:  '/curral/cavalo-bronze.png',   // sela bronze
+};
+const HORSE_SEM_CLASSE = '/curral/cavalo-sem-classe.png'; // sela de couro marrom
 
-function computeCoat(id: string) {
-  const sum = id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  return COAT_PALETTE[sum % COAT_PALETTE.length];
-}
-
-// ─── StandingHorse SVG ────────────────────────────────────────────────────────
-
-function StandingHorse({ id, moodKey }: { id: string; moodKey: string }) {
-  const { coat, light } = computeCoat(id);
-  const gradId = `hg${id.replace(/[^a-zA-Z0-9]/g, '')}`;
-
-  const MOUTH: Record<string, string> = {
-    campeao:    'M40 44 q7 6 14 0',
-    tranquilo:  'M41 44 q6 3 12 0',
-    preocupado: 'M41 45 q6 -4 12 0',
-    irritado:   'M40 45 q7 -6 14 0',
-    critico:    'M38 46 q9 -9 16 0',
-  };
-  const BROW1: Record<string, string> = {
-    campeao:    'M38 31 q5 -3 8 0',
-    tranquilo:  'M38 32 q5 -1 8 0',
-    preocupado: 'M38 31 q5 2 8 -1',
-    irritado:   'M38 29 q5 5 8 -2',
-    critico:    'M38 27 q5 7 8 -3',
-  };
-  const BROW2: Record<string, string> = {
-    campeao:    'M50 31 q5 -3 8 0',
-    tranquilo:  'M50 32 q5 -1 8 0',
-    preocupado: 'M50 32 q5 1 8 -2',
-    irritado:   'M50 30 q5 4 8 -2',
-    critico:    'M50 28 q5 6 8 -3',
-  };
-
-  const mk = moodKey in MOUTH ? moodKey : 'tranquilo';
-
+/**
+ * Cavalo do Curral — a arte oficial, sem recriação e sem sobreposições.
+ *
+ * <p>A sela faz parte da própria arte: a Classe escolhe o PNG, e é só isso. Nenhuma
+ * cor é processada em tempo de execução.
+ *
+ * <p>O projeto já usa `images: { unoptimized: true }`, então o Next serve o PNG
+ * byte a byte: nada é recomprimido nem reamostrado. Clientes da mesma Classe
+ * compartilham o mesmo arquivo estático.
+ */
+function StandingHorse({ classe }: { classe: ImplantacaoClasse | null }) {
   return (
-    <svg viewBox="0 0 170 180" width="84" height="84" aria-hidden="true">
-      <defs>
-        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor={light} />
-          <stop offset="100%" stopColor={coat} />
-        </linearGradient>
-      </defs>
-      {/* Back legs */}
-      <rect x="116" y="118" width="13" height="50" rx="5" fill={coat} />
-      <rect x="132" y="118" width="13" height="50" rx="5" fill={coat} />
-      {/* Back hooves */}
-      <ellipse cx="122" cy="168" rx="8" ry="5" fill="#1C0A00" />
-      <ellipse cx="138" cy="168" rx="8" ry="5" fill="#1C0A00" />
-      {/* Tail */}
-      <path d="M148 98 q24 4 20 42 q-2 18 -10 28" stroke={coat} strokeWidth="11" fill="none" strokeLinecap="round" />
-      <path d="M148 98 q28 6 24 44 q-4 20 -14 30" stroke={light} strokeWidth="4" fill="none" strokeLinecap="round" opacity=".5" />
-      {/* Body */}
-      <path d="M56 94 q32 -30 94 -16 q22 4 16 42 q-4 22 -68 20 q-38 -2 -42 -46 z" fill={`url(#${gradId})`} />
-      {/* Neck */}
-      <path d="M62 92 q-18 -32 -8 -56 q4 -12 22 -14 q16 2 20 18 q6 18 -14 52 z" fill={`url(#${gradId})`} />
-      {/* Front legs */}
-      <rect x="64" y="118" width="13" height="50" rx="5" fill={coat} />
-      <rect x="80" y="118" width="13" height="50" rx="5" fill={coat} />
-      {/* Front hooves */}
-      <ellipse cx="70" cy="168" rx="8" ry="5" fill="#1C0A00" />
-      <ellipse cx="86" cy="168" rx="8" ry="5" fill="#1C0A00" />
-      {/* Head */}
-      <path d="M48 24 q-14 0 -16 16 q-2 16 8 24 q10 8 26 6 q14 -2 18 -14 q6 -18 -6 -28 q-10 -8 -30 -4 z" fill={`url(#${gradId})`} />
-      {/* Snout */}
-      <path d="M30 52 q-4 -2 -6 6 q-2 8 4 12 q6 4 16 2 q10 -2 10 -10 q0 -10 -8 -12 q-8 -2 -16 2 z" fill={light} />
-      <ellipse cx="33" cy="61" rx="3" ry="2" fill={coat} opacity=".5" />
-      <ellipse cx="45" cy="63" rx="3" ry="2" fill={coat} opacity=".5" />
-      {/* Ears */}
-      <path d="M52 16 q0 -12 8 -10 q8 2 6 14 q-4 4 -12 2 z" fill={coat} />
-      <path d="M68 12 q4 -12 12 -8 q6 4 2 14 q-4 4 -12 -2 z" fill={coat} />
-      {/* Mane */}
-      <path d="M56 22 q-8 12 -10 42 q4 -4 8 -2 q4 -22 10 -38 z" fill="#1C0A00" opacity=".65" />
-      {/* Eye */}
-      <ellipse cx="44" cy="32" rx="4" ry="4.5" fill="#1C0A00" />
-      <ellipse cx="43" cy="31" rx="1.5" ry="1.5" fill="#fff" />
-      {/* Brows */}
-      <path d={BROW1[mk]} stroke="#1C0A00" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-      <path d={BROW2[mk]} stroke="#1C0A00" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-      {/* Mouth */}
-      <path d={MOUTH[mk]} stroke="#1C0A00" strokeWidth="2" fill="none" strokeLinecap="round" />
-    </svg>
+    <div className="ch-horse-wrap">
+      <Image
+        src={classe ? HORSE_POR_CLASSE[classe] : HORSE_SEM_CLASSE}
+        alt=""
+        width={HORSE_W}
+        height={HORSE_H}
+        className="ch-horse-img"
+        aria-hidden="true"
+      />
+    </div>
   );
 }
 
@@ -158,6 +112,30 @@ function applyMoodFilter(
   return impls;
 }
 
+// ─── Setores por classe ───────────────────────────────────────────────────────
+// A classe define a prioridade MACRO dos setores. Dentro de cada setor a ordem de
+// chegada é preservada tal como vem da API (createdAt DESC) — nenhum algoritmo de
+// ordenação interna foi introduzido.
+
+/** Chave interna para os registros ainda não classificados. Não é uma quinta classe. */
+const SEM_CLASSE = 'SEM_CLASSE' as const;
+
+type SetorKey = ImplantacaoClasse | typeof SEM_CLASSE;
+
+const SETOR_ORDEM: SetorKey[] = ['PRIME', 'GOLD', 'PLATIUM', 'BRONZE', SEM_CLASSE];
+
+const SETOR_CONFIG: Record<SetorKey, { emoji: string; titulo: string }> = {
+  PRIME:      { emoji: '💎', titulo: 'Classe Prime' },
+  GOLD:       { emoji: '🥇', titulo: 'Classe Gold' },
+  PLATIUM:    { emoji: '🥈', titulo: 'Classe Platium' },
+  BRONZE:     { emoji: '🥉', titulo: 'Classe Bronze' },
+  [SEM_CLASSE]: { emoji: '🐎', titulo: 'Sem classe' },
+};
+
+function setorDe(impl: ImplantacaoCliente): SetorKey {
+  return impl.classe ?? SEM_CLASSE;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 interface Props {
@@ -170,6 +148,16 @@ export function ImplantacaoCurral({ implantacoes }: Props) {
 
   const curralAll      = implantacoes.filter((i) => i.etapa === 'curral');
   const curralFiltered = applyMoodFilter(curralAll, filter);
+
+  // Setores na ordem macro, já sem os vazios — um setor sem resultado após o filtro é
+  // omitido para não deixar buraco na tela, sem alterar o significado do filtro.
+  const setores = SETOR_ORDEM
+    .map((key) => ({
+      key,
+      config: SETOR_CONFIG[key],
+      itens: curralFiltered.filter((i) => setorDe(i) === key),
+    }))
+    .filter((s) => s.itens.length > 0);
 
   if (curralAll.length === 0) return null;
 
@@ -266,17 +254,61 @@ export function ImplantacaoCurral({ implantacoes }: Props) {
             repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 2px,transparent 2px 14px),
             repeating-linear-gradient(0deg,transparent 0 22px,rgba(80,150,40,.05) 22px 24px);
         }
+        /* Rolagem única de todos os setores — antes vivia na própria grade. Mover para
+           cá permite que cada setor cresça quantas linhas precisar. */
+        .corral-sectors {
+          max-height: 520px; overflow-y: auto; overflow-x: hidden;
+          padding: 6px 4px 8px 2px;
+          position: relative; z-index: 1;
+        }
+        .corral-sectors::-webkit-scrollbar { width: 6px }
+        .corral-sectors::-webkit-scrollbar-track { background: rgba(255,255,255,.25); border-radius: 8px }
+        .corral-sectors::-webkit-scrollbar-thumb { background: rgba(60,120,30,.35); border-radius: 8px }
+        .corral-sector { position: relative; }
+        /* Placa de madeira do setor, no vocabulário do celeiro */
+        .corral-sector-head {
+          display: inline-flex; align-items: center; gap: 8px;
+          margin: 10px 0 2px; padding: 5px 13px 5px 10px;
+          border-radius: 8px;
+          background: linear-gradient(180deg,#F6E6C8,#E3C89A);
+          border: 1.5px solid rgba(124,86,42,.55);
+          box-shadow: 0 2px 5px rgba(60,40,15,.22), inset 0 1px 0 rgba(255,255,255,.65);
+        }
+        .corral-sector-head .cs-emoji { font-size: 14px; line-height: 1 }
+        .corral-sector-head .cs-title {
+          font-size: 11.5px; font-weight: 900; letter-spacing: .6px;
+          text-transform: uppercase; color: #5C3E1A;
+          text-shadow: 0 1px 0 rgba(255,255,255,.5);
+        }
+        .corral-sector-head .cs-count {
+          font-size: 10px; font-weight: 800; color: #fff;
+          background: rgba(92,62,26,.82);
+          padding: 1px 7px; border-radius: 999px;
+        }
+        /* Cerca de divisa: mesmos trilhos e mourões brancos da cerca do curral */
+        .corral-sector-fence {
+          position: relative; height: 16px; margin: 14px 0 2px;
+        }
+        .corral-sector-fence::before {
+          content: '';
+          position: absolute; left: 0; right: 0; top: 3px; height: 3px;
+          background: rgba(255,255,255,.92);
+          box-shadow: 0 6px 0 rgba(255,255,255,.92), 0 1px 4px rgba(0,0,0,.12);
+        }
+        .corral-sector-fence::after {
+          content: '';
+          position: absolute; inset: 0;
+          background: repeating-linear-gradient(90deg,
+            rgba(255,255,255,.92) 0 5px, transparent 5px 44px);
+          pointer-events: none;
+        }
         .corral-horse-grid {
           display: grid;
           grid-template-columns: repeat(8, minmax(0, 1fr));
           gap: 18px 14px;
-          max-height: 520px; overflow-y: auto; overflow-x: hidden;
-          padding: 18px 4px 8px 2px;
+          padding: 12px 2px 4px 2px;
           position: relative; z-index: 1;
         }
-        .corral-horse-grid::-webkit-scrollbar { width: 6px }
-        .corral-horse-grid::-webkit-scrollbar-track { background: rgba(255,255,255,.25); border-radius: 8px }
-        .corral-horse-grid::-webkit-scrollbar-thumb { background: rgba(60,120,30,.35); border-radius: 8px }
         @media (max-width: 1200px) { .corral-horse-grid { grid-template-columns: repeat(6, minmax(0,1fr)); } }
         @media (max-width: 960px)  { .corral-horse-grid { grid-template-columns: repeat(4, minmax(0,1fr)); } }
         @media (max-width: 640px)  { .corral-horse-grid { grid-template-columns: repeat(3, minmax(0,1fr)); } }
@@ -316,6 +348,15 @@ export function ImplantacaoCurral({ implantacoes }: Props) {
         .corral-horse .ch-body {
           width: 86px; height: 86px;
           display: flex; align-items: flex-end; justify-content: center; position: relative;
+        }
+        /* O wrapper é maior que o slot de propósito: a margem transparente do PNG
+           transborda sem pintar nada, e o cavalo aproveita o card inteiro. */
+        .corral-horse .ch-horse-wrap {
+          position: relative; flex: none;
+          width: ${HORSE_W}px; height: ${HORSE_H}px;
+        }
+        .corral-horse .ch-horse-img {
+          display: block; width: ${HORSE_W}px; height: ${HORSE_H}px;
         }
         .corral-horse .ch-shadow {
           position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
@@ -496,18 +537,27 @@ export function ImplantacaoCurral({ implantacoes }: Props) {
             </span>
           </div>
 
-          {/* Horse grid */}
-          <div className="corral-horse-grid">
-            {curralFiltered.length === 0 ? (
+          {/* Setores por classe — o scroll vive aqui, para que os setores cresçam
+              verticalmente e a rolagem continue sendo uma só, como antes. */}
+          <div className="corral-sectors">
+            {setores.length === 0 ? (
               <div style={{
-                gridColumn: '1 / -1',
                 textAlign: 'center', padding: '40px 20px',
                 color: '#6B7178', fontSize: 13, fontWeight: 600,
               }}>
                 Nenhum cliente neste filtro.
               </div>
-            ) : (
-              curralFiltered.map((impl) => {
+            ) : setores.map((setor, idx) => (
+              <div key={setor.key} className="corral-sector">
+                {/* Placa do setor */}
+                <div className="corral-sector-head">
+                  <span className="cs-emoji" aria-hidden="true">{setor.config.emoji}</span>
+                  <span className="cs-title">{setor.config.titulo}</span>
+                  <span className="cs-count">{setor.itens.length}</span>
+                </div>
+
+                <div className="corral-horse-grid">
+                  {setor.itens.map((impl) => {
                 const mood      = computeMood(impl.demandasAbertasCount, impl.maiorPrioridadeAberta);
                 const openCount = impl.demandasAbertasCount;
                 const isCrit    = mood.key === 'critico';
@@ -527,15 +577,22 @@ export function ImplantacaoCurral({ implantacoes }: Props) {
                     <div className="ch-mood">{mood.emoji}</div>
                     <div className="ch-badge">{openCount}</div>
                     <div className="ch-body">
-                      <StandingHorse id={impl.id} moodKey={mood.key} />
+                      <StandingHorse classe={impl.classe} />
                       <div className="ch-shadow" />
                     </div>
                     <div className="ch-label">{impl.clienteRazaoSocial}</div>
                     <div className="ch-status">{mood.op}</div>
                   </Link>
                 );
-              })
-            )}
+                  })}
+                </div>
+
+                {/* Cerca de divisa — só entre setores, nunca após o último */}
+                {idx < setores.length - 1 && (
+                  <div className="corral-sector-fence" aria-hidden="true" />
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>

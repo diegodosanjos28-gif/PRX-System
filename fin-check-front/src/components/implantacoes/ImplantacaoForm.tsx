@@ -21,6 +21,7 @@ interface FormValues {
   clienteId: string;
   etapa: string;
   status: string;
+  classe: string;
   responsavel: string;
   donoContato: string;
   adquirentes: string;
@@ -54,6 +55,7 @@ function toFormDefaults(impl?: ImplantacaoCliente): Partial<FormValues> {
     clienteId:   impl.clienteId,
     etapa:       impl.etapa,
     status:      impl.status ?? '',
+    classe:      impl.classe ?? '',
     responsavel: impl.responsavel ?? '',
     donoContato: impl.donoContato ?? '',
     adquirentes: Array.isArray(impl.adquirentes) ? impl.adquirentes.join(', ') : '',
@@ -78,6 +80,7 @@ export function ImplantacaoForm({ defaultValues, onSubmit, isPending, existingPr
       clienteId:   '',
       etapa:       'curral',
       status:      '',
+      classe:      '',
       responsavel: '',
       donoContato: '',
       adquirentes: '',
@@ -103,6 +106,8 @@ export function ImplantacaoForm({ defaultValues, onSubmit, isPending, existingPr
       clienteId:    data.clienteId,
       etapa:        data.etapa,
       status:       data.etapa === 'curral' ? null : data.status || null,
+      // Vazio vira null: um cliente ainda não classificado continua salvável.
+      classe:       data.classe || null,
       responsavel:  data.responsavel || undefined,
       donoContato:  data.donoContato || undefined,
       adquirentes:  adquirentesArray,
@@ -161,6 +166,34 @@ export function ImplantacaoForm({ defaultValues, onSubmit, isPending, existingPr
               </Select>
             )}
           />
+        </div>
+
+        {/* Classe comercial — dimensão independente da etapa e da saúde operacional.
+            Ocupa a segunda coluna ao lado de Etapa; quando Status aparece (etapa ≠ curral),
+            a grade de 2 colunas acomoda Classe na linha seguinte. */}
+        <div className="space-y-1">
+          <Label>Classe *</Label>
+          <Controller
+            control={control}
+            name="classe"
+            rules={{ required: 'Classe obrigatória' }}
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Classe" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PRIME">Prime</SelectItem>
+                  <SelectItem value="GOLD">Gold</SelectItem>
+                  <SelectItem value="PLATIUM">Platium</SelectItem>
+                  <SelectItem value="BRONZE">Bronze</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+          {errors.classe && (
+            <p className="text-xs text-red-500">{errors.classe.message}</p>
+          )}
         </div>
 
         {etapa !== 'curral' && (

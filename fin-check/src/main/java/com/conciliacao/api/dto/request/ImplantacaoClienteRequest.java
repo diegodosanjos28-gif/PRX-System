@@ -24,6 +24,13 @@ public record ImplantacaoClienteRequest(
              message = "Status inválido. Valores aceitos: fluindo, aguardando, travado")
     String status,
 
+    // Classe comercial. Null é aceito: registros anteriores à V26 não possuem classe e
+    // clientes não classificados devem continuar salvando normalmente. @Pattern não
+    // reprova null, então a validação só incide quando um valor é informado.
+    @Pattern(regexp = "PRIME|GOLD|PLATIUM|BRONZE",
+             message = "Classe inválida. Valores aceitos: PRIME, GOLD, PLATIUM, BRONZE")
+    String classe,
+
     String responsavel,
 
     String donoContato,

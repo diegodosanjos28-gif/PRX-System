@@ -68,6 +68,8 @@ export interface ImplantacaoClienteRequest {
   clienteId: string;
   etapa: string;
   status: string | null;
+  /** Classe comercial. `null` enquanto o cliente não for classificado. */
+  classe?: string | null;
   responsavel?: string;
   donoContato?: string;
   adquirentes?: string[];

@@ -14,6 +14,8 @@ public record ImplantacaoClienteResponse(
     String clienteNomeFantasia,
     String etapa,
     String status,
+    // Classe comercial (V26): PRIME | GOLD | PLATIUM | BRONZE, ou null se não classificado
+    String classe,
     String responsavel,
     String donoContato,
     JsonNode adquirentes,
